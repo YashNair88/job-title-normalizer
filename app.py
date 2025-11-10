@@ -14,7 +14,6 @@ st.markdown("""
 header[data-testid="stHeader"]{ background:transparent !important; }
 .jt-title { color:#111; text-align:center; font-size:clamp(1.6rem,4vw,2.4rem); font-weight:700; margin-bottom:0.35rem; }
 .jt-subtitle { text-align:center; color:#333; font-size:clamp(.95rem,2.4vw,1.1rem); margin-bottom:1.25rem; }
-.jt-uplabel { display:block; color:#222; font-weight:600; margin:.25rem 0 .4rem; }
 .stFileUploader { border:2px dashed #0078ff !important; border-radius:10px !important; background:#fff !important; padding:1.1rem !important; }
 [data-testid="stFileUploader"] label, section[data-testid="stFileUploader"] > label > div { color:#222 !important; opacity:1 !important; }
 .stDownloadButton button, .stButton button{ background:#0078ff !important; color:#fff !important; border:none !important; border-radius:8px !important; padding:.7rem 1.3rem !important; font-weight:600 !important; }
@@ -25,7 +24,7 @@ header[data-testid="stHeader"]{ background:transparent !important; }
 
 # ---- Header ----
 st.markdown("<h1 class='jt-title'>Job Title Normalizer</h1>", unsafe_allow_html=True)
-st.markdown("<p class='jt-subtitle'>Upload your Excel or CSV file, choose the sheet and column you want to standardize, and download the cleaned version.</p>", unsafe_allow_html=True)
+st.markdown("<p class='jt-subtitle'>Upload your Excel or CSV file, choose the sheet and column you want to standardize, and view the top changed results before downloading the cleaned version.</p>", unsafe_allow_html=True)
 
 # ---- Upload ----
 uploaded_file = st.file_uploader(label="", type=["xlsx", "csv"], label_visibility="collapsed")
@@ -60,23 +59,21 @@ if uploaded_file is not None:
                         temp_output = tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx').name
                         dept_json_output = tempfile.NamedTemporaryFile(delete=False, suffix='.json').name
 
-                        # Process and return cleaned DataFrame
-                        cleaned_df = process_excel(
+                        cleaned_df, major_changes_df = process_excel(
                             input_path=temp_input,
                             output_path=temp_output,
                             mapping_path="canonical_mapping_raw.json",
                             dept_json_output=dept_json_output,
                             target_column=selected_column,
                             sheet_name=selected_sheet,
-                            return_df=True
+                            return_df=True,
+                            return_changes=True
                         )
 
                         st.success(f"Cleaning complete for sheet '{selected_sheet}' and column '{selected_column}'.")
 
-                        # Show preview
-                        st.subheader("Preview")
-                        preview_cols = [selected_column, f"Normalized {selected_column}"]
-                        st.dataframe(cleaned_df[preview_cols].head())
+                        st.subheader("Preview (Top 5 Most Changed Rows)")
+                        st.dataframe(major_changes_df)
 
                         with open(temp_output, "rb") as f:
                             st.download_button(
@@ -106,22 +103,21 @@ if uploaded_file is not None:
                     temp_output = tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx').name
                     dept_json_output = tempfile.NamedTemporaryFile(delete=False, suffix='.json').name
 
-                    cleaned_df = process_excel(
+                    cleaned_df, major_changes_df = process_excel(
                         input_path=temp_input,
                         output_path=temp_output,
                         mapping_path="canonical_mapping_raw.json",
                         dept_json_output=dept_json_output,
                         target_column=selected_column,
                         sheet_name=None,
-                        return_df=True
+                        return_df=True,
+                        return_changes=True
                     )
 
                     st.success(f"Cleaning complete for column '{selected_column}'.")
 
-                    # Show preview
-                    st.subheader("Preview")
-                    preview_cols = [selected_column, f"Normalized {selected_column}"]
-                    st.dataframe(cleaned_df[preview_cols].head())
+                    st.subheader("Preview (Top 5 Most Changed Rows)")
+                    st.dataframe(major_changes_df)
 
                     with open(temp_output, "rb") as f:
                         st.download_button(
