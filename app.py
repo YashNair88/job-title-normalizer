@@ -72,7 +72,7 @@ if uploaded_file is not None:
 
                         st.success(f"Cleaning complete for sheet '{selected_sheet}' and column '{selected_column}'.")
 
-                        st.subheader("Preview (Top 5 Most Changed Rows)")
+                        st.subheader("Preview")
                         st.dataframe(major_changes_df)
 
                         with open(temp_output, "rb") as f:
