@@ -75,7 +75,7 @@ if uploaded_file is not None:
 
                         st.success(f"Cleaning complete for column '{selected_column}'.")
 
-                        st.subheader("Preview (Top 5 Most Changed Rows)")
+                        st.subheader("Preview")
                         preview_changes = major_changes_df.copy()
                         preview_changes.index = range(1, len(preview_changes) + 1)  # start index at 1
                         preview_changes.index.name = ""  # remove index header
