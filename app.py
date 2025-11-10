@@ -8,89 +8,74 @@ st.set_page_config(page_title="Job Title Normalizer", page_icon="🧹", layout="
 
 # Custom CSS to fix title visibility on all devices and themes
 st.markdown("""
-    <style>
-        /* Base page */
-        .stApp {
-            background-color: #f8fafc;
-            font-family: 'Inter', sans-serif;
-            padding-top: 2rem;
-        }
+<style>
+/* Page and container */
+.stApp { background-color:#f8fafc; font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+.block-container { max-width: 820px; margin: 0 auto; padding-top: 2rem; }
 
-        /* Hide Streamlit dark header bar */
-        header[data-testid="stHeader"] {
-            background: transparent !important;
-        }
+/* Hide dark header bar background so titles are readable */
+header[data-testid="stHeader"]{ background:transparent !important; }
 
-        /* Title */
-        h1 {
-            color: #111111 !important;
-            text-align: center !important;
-            font-size: clamp(1.6rem, 4vw, 2.4rem) !important;
-            font-weight: 700 !important;
-            margin-bottom: 0.4rem !important;
-        }
+/* Title and subtitle */
+h1.st-title, .jt-title { 
+  color:#111 !important; text-align:center !important; 
+  font-size:clamp(1.6rem,4vw,2.4rem) !important; font-weight:700; margin:0 0 .35rem 0;
+}
+.jt-subtitle { 
+  text-align:center; color:#333; 
+  font-size:clamp(.95rem,2.4vw,1.1rem); margin:0 0 1.25rem 0;
+}
 
-        /* Subtitle */
-        .subtitle {
-            text-align: center;
-            font-size: clamp(0.95rem, 2.5vw, 1.1rem);
-            color: #333333;
-            margin-bottom: 2rem;
-        }
+/* Our own visible label above the uploader */
+.jt-uplabel {
+  display:block; color:#222; font-weight:600; margin:.25rem 0 .4rem;
+}
 
-        /* File uploader box */
-        section[data-testid="stFileUploader"] > label div {
-            color: #222222 !important; /* <-- makes “Upload Excel or CSV file” visible */
-            font-weight: 500 !important;
-            font-size: 1rem !important;
-            margin-bottom: 0.3rem !important;
-        }
+/* Uploader box */
+.stFileUploader { 
+  border:2px dashed #0078ff !important; border-radius:10px !important; 
+  background:#fff !important; padding:1.1rem !important;
+}
+/* Make sure any internal label inside uploader is fully visible if present */
+[data-testid="stFileUploader"] label, 
+section[data-testid="stFileUploader"] > label > div {
+  color:#222 !important; opacity:1 !important; -webkit-text-fill-color:#222 !important;
+}
 
-        .stFileUploader {
-            border: 2px dashed #0078ff !important;
-            border-radius: 10px !important;
-            background-color: #ffffff !important;
-            padding: 1.2rem !important;
-            margin-bottom: 1.2rem;
-        }
+/* Buttons */
+.stDownloadButton button, .stButton button{
+  background:#0078ff !important; color:#fff !important; 
+  border:none !important; border-radius:8px !important; 
+  padding:.7rem 1.3rem !important; font-weight:600 !important;
+}
 
-        /* Buttons */
-        .stDownloadButton button, .stButton button {
-            background-color: #0078ff !important;
-            color: white !important;
-            border-radius: 8px !important;
-            padding: 0.7rem 1.4rem !important;
-            font-weight: 600 !important;
-            border: none !important;
-        }
+/* Alerts */
+.stAlert { border-radius:10px !important; }
 
-        /* Info box */
-        .stAlert {
-            border-radius: 10px !important;
-            padding: 1rem !important;
-        }
-
-        /* Mobile optimization */
-        @media (max-width: 600px) {
-            .stApp {
-                padding: 1rem 0.5rem;
-            }
-            h1 {
-                font-size: 1.6rem !important;
-            }
-        }
-    </style>
+/* Mobile tweaks */
+@media (max-width: 600px){
+  .block-container{ padding-top:1.2rem; }
+  .stFileUploader{ padding:.85rem !important; }
+}
+</style>
 """, unsafe_allow_html=True)
 
 
 
 # Title & subtitle (these will now be visible everywhere)
-st.markdown("<h1>Job Title Normalizer</h1>", unsafe_allow_html=True)
-st.markdown("<p class='subtext'>Upload your Excel or CSV file to automatically clean and standardize job titles.</p>", unsafe_allow_html=True)
+st.markdown("<h1 class='jt-title'>Job Title Normalizer</h1>", unsafe_allow_html=True)
+st.markdown(
+    "<p class='jt-subtitle'>Upload your Excel or CSV file to automatically clean and standardize job titles.</p>",
+    unsafe_allow_html=True
+)
 
+st.markdown("<label class='jt-uplabel'>Upload Excel or CSV file</label>", unsafe_allow_html=True)
 
-
-uploaded_file = st.file_uploader("📤 Upload Excel or CSV file", type=["xlsx", "csv"])
+uploaded_file = st.file_uploader(
+    label="",                      # we render our own label above
+    type=["xlsx", "csv"],
+    label_visibility="collapsed"   # hide Streamlit's internal label
+)
 
 if uploaded_file is not None:
     with st.spinner("Processing your file... Please wait ⏳"):
