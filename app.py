@@ -23,8 +23,16 @@ header[data-testid="stHeader"]{ background:transparent !important; }
 """, unsafe_allow_html=True)
 
 # ---- Header ----
-st.markdown("<h1 class='jt-title'>Job Title Normalizer</h1>", unsafe_allow_html=True)
-st.markdown("<p class='jt-subtitle'>Clean and standardize job titles instantly from your Excel or CSV file.</p>", unsafe_allow_html=True)
+# st.markdown("<h1 class='jt-title'>Job Title Normalizer</h1>", unsafe_allow_html=True)
+st.markdown(
+    "<div style='text-align:center; font-size:28px; font-weight:700; color:#111; margin:0 0 6px;'>Job Title Normalizer</div>",
+    unsafe_allow_html=True
+)
+# st.markdown("<p class='jt-subtitle'>Clean and standardize job titles instantly from your Excel or CSV file.</p>", unsafe_allow_html=True)
+st.markdown(
+    "<p style='text-align:center; font-size:16px; color:#333; margin:0 0 18px;'>Clean and standardize job titles instantly from your Excel or CSV file.</p>",
+    unsafe_allow_html=True
+)
 
 # ---- Upload ----
 uploaded_file = st.file_uploader(label="", type=["xlsx", "csv"], label_visibility="collapsed")
