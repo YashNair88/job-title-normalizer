@@ -25,7 +25,7 @@ header[data-testid="stHeader"]{ background:transparent !important; }
 
 # ---- Header ----
 st.markdown("<h1 class='jt-title'>Job Title Normalizer</h1>", unsafe_allow_html=True)
-st.markdown("<p class='jt-subtitle'>Upload your Excel or CSV file, choose the sheet and column you want to standardize, and view a preview before downloading the cleaned version.</p>", unsafe_allow_html=True)
+st.markdown("<p class='jt-subtitle'>Upload your Excel or CSV file, choose the sheet and column you want to standardize, and download the cleaned version.</p>", unsafe_allow_html=True)
 
 # ---- Upload ----
 uploaded_file = st.file_uploader(label="", type=["xlsx", "csv"], label_visibility="collapsed")
@@ -45,10 +45,12 @@ if uploaded_file is not None:
                 columns = list(df.columns)
                 selected_column = st.selectbox("Select the column to clean:", options=columns)
 
-                if st.button("Clean Selected Column"):
-                    st.subheader("Preview Before Cleaning")
+                # Show selected column preview
+                if selected_column:
+                    st.subheader("Selected Column")
                     st.dataframe(df[[selected_column]].head())
 
+                if st.button("Clean Selected Column"):
                     with st.spinner("Processing your file... Please wait ⏳"):
                         with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
                             uploaded_file.seek(0)
@@ -58,7 +60,7 @@ if uploaded_file is not None:
                         temp_output = tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx').name
                         dept_json_output = tempfile.NamedTemporaryFile(delete=False, suffix='.json').name
 
-                        # Process file and return cleaned DataFrame
+                        # Process and return cleaned DataFrame
                         cleaned_df = process_excel(
                             input_path=temp_input,
                             output_path=temp_output,
@@ -71,8 +73,9 @@ if uploaded_file is not None:
 
                         st.success(f"Cleaning complete for sheet '{selected_sheet}' and column '{selected_column}'.")
 
-                        st.subheader("Preview After Cleaning")
-                        preview_cols = [selected_column, f"{selected_column}_Cleaned"]
+                        # Show preview
+                        st.subheader("Preview")
+                        preview_cols = [selected_column, f"Normalized {selected_column}"]
                         st.dataframe(cleaned_df[preview_cols].head())
 
                         with open(temp_output, "rb") as f:
@@ -89,10 +92,12 @@ if uploaded_file is not None:
             columns = list(df.columns)
             selected_column = st.selectbox("Select the column to clean:", options=columns)
 
-            if st.button("Clean Selected Column"):
-                st.subheader("Preview Before Cleaning")
+            # Show selected column preview
+            if selected_column:
+                st.subheader("Selected Column")
                 st.dataframe(df[[selected_column]].head())
 
+            if st.button("Clean Selected Column"):
                 with st.spinner("Processing your file... Please wait ⏳"):
                     with tempfile.NamedTemporaryFile(delete=False, suffix='.csv') as tmp:
                         tmp.write(uploaded_file.getbuffer())
@@ -113,8 +118,9 @@ if uploaded_file is not None:
 
                     st.success(f"Cleaning complete for column '{selected_column}'.")
 
-                    st.subheader("Preview After Cleaning")
-                    preview_cols = [selected_column, f"{selected_column}_Cleaned"]
+                    # Show preview
+                    st.subheader("Preview")
+                    preview_cols = [selected_column, f"Normalized {selected_column}"]
                     st.dataframe(cleaned_df[preview_cols].head())
 
                     with open(temp_output, "rb") as f:
@@ -130,5 +136,6 @@ if uploaded_file is not None:
 
     except Exception as e:
         st.error(f"Error processing file: {e}")
+
 else:
     st.info("Please upload a file to begin.")
