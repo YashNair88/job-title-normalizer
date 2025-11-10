@@ -69,7 +69,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-st.markdown("<label class='jt-uplabel'>Upload Excel or CSV file</label>", unsafe_allow_html=True)
+# st.markdown("<label class='jt-uplabel'>Upload Excel or CSV file</label>", unsafe_allow_html=True)
 
 uploaded_file = st.file_uploader(
     label="",                      # we render our own label above
