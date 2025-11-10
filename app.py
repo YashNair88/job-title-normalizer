@@ -6,36 +6,34 @@ from job_title_cleaner import process_excel
 
 st.set_page_config(page_title="Job Title Normalizer", page_icon="🧹", layout="centered")
 
-st.title("🧹 Job Title Normalizer")
-st.markdown("Upload your Excel or CSV file to automatically clean and standardize job titles.")
-
+# Custom CSS to fix title visibility on all devices and themes
 st.markdown("""
     <style>
-        /* General page styling */
+        /* Global background and typography */
         .stApp {
-            background-color: #f8fafc;
+            background-color: #f9fafc;
             font-family: 'Inter', sans-serif;
             padding: 2rem 1rem;
         }
 
-        /* Title styling */
-        h1 {
-            color: #1a1a1a;
+        /* Always show title text in black */
+        h1, h2, h3, h4, h5, h6, .stMarkdown h1 {
+            color: #111111 !important;
             text-align: center;
-            font-size: clamp(1.4rem, 4vw, 2.2rem);
-            font-weight: 650;
-            margin-bottom: 0.5rem;
+            font-weight: 700 !important;
+            font-size: clamp(1.6rem, 5vw, 2.3rem) !important;
+            margin-bottom: 0.5rem !important;
         }
 
-        /* Subtext below title */
-        .stMarkdown p {
+        /* Subheading text */
+        .subtext {
             text-align: center;
-            font-size: clamp(0.9rem, 2.5vw, 1rem);
-            color: #3a3a3a;
-            margin-bottom: 1.5rem;
+            color: #444444;
+            font-size: clamp(0.9rem, 2.5vw, 1.1rem);
+            margin-bottom: 2rem;
         }
 
-        /* File uploader box */
+        /* File uploader styling */
         .stFileUploader {
             border: 2px dashed #0078ff !important;
             border-radius: 10px !important;
@@ -53,23 +51,24 @@ st.markdown("""
             border: none !important;
         }
 
-        /* Success/info messages */
+        /* Alerts and messages */
         .stAlert {
             border-radius: 10px !important;
             padding: 1rem !important;
         }
 
-        /* Reduce padding on mobile */
         @media (max-width: 600px) {
             .stApp {
                 padding: 1rem 0.5rem;
             }
-            .stFileUploader {
-                padding: 0.8rem !important;
-            }
         }
     </style>
 """, unsafe_allow_html=True)
+
+# Title & subtitle (these will now be visible everywhere)
+st.markdown("<h1>Job Title Normalizer</h1>", unsafe_allow_html=True)
+st.markdown("<p class='subtext'>Upload your Excel or CSV file to automatically clean and standardize job titles.</p>", unsafe_allow_html=True)
+
 
 
 uploaded_file = st.file_uploader("📤 Upload Excel or CSV file", type=["xlsx", "csv"])
