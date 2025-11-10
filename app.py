@@ -9,36 +9,49 @@ st.set_page_config(page_title="Job Title Normalizer", page_icon="🧹", layout="
 # Custom CSS to fix title visibility on all devices and themes
 st.markdown("""
     <style>
-        /* Global background and typography */
+        /* Base page */
         .stApp {
-            background-color: #f9fafc;
+            background-color: #f8fafc;
             font-family: 'Inter', sans-serif;
-            padding: 2rem 1rem;
+            padding-top: 2rem;
         }
 
-        /* Always show title text in black */
-        h1, h2, h3, h4, h5, h6, .stMarkdown h1 {
+        /* Hide Streamlit dark header bar */
+        header[data-testid="stHeader"] {
+            background: transparent !important;
+        }
+
+        /* Title */
+        h1 {
             color: #111111 !important;
-            text-align: center;
+            text-align: center !important;
+            font-size: clamp(1.6rem, 4vw, 2.4rem) !important;
             font-weight: 700 !important;
-            font-size: clamp(1.6rem, 5vw, 2.3rem) !important;
-            margin-bottom: 0.5rem !important;
+            margin-bottom: 0.4rem !important;
         }
 
-        /* Subheading text */
-        .subtext {
+        /* Subtitle */
+        .subtitle {
             text-align: center;
-            color: #444444;
-            font-size: clamp(0.9rem, 2.5vw, 1.1rem);
+            font-size: clamp(0.95rem, 2.5vw, 1.1rem);
+            color: #333333;
             margin-bottom: 2rem;
         }
 
-        /* File uploader styling */
+        /* File uploader box */
+        section[data-testid="stFileUploader"] > label div {
+            color: #222222 !important; /* <-- makes “Upload Excel or CSV file” visible */
+            font-weight: 500 !important;
+            font-size: 1rem !important;
+            margin-bottom: 0.3rem !important;
+        }
+
         .stFileUploader {
             border: 2px dashed #0078ff !important;
             border-radius: 10px !important;
             background-color: #ffffff !important;
             padding: 1.2rem !important;
+            margin-bottom: 1.2rem;
         }
 
         /* Buttons */
@@ -51,15 +64,19 @@ st.markdown("""
             border: none !important;
         }
 
-        /* Alerts and messages */
+        /* Info box */
         .stAlert {
             border-radius: 10px !important;
             padding: 1rem !important;
         }
 
+        /* Mobile optimization */
         @media (max-width: 600px) {
             .stApp {
                 padding: 1rem 0.5rem;
+            }
+            h1 {
+                font-size: 1.6rem !important;
             }
         }
     </style>
