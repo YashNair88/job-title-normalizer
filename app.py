@@ -11,25 +11,66 @@ st.markdown("Upload your Excel or CSV file to automatically clean and standardiz
 
 st.markdown("""
     <style>
+        /* General page styling */
         .stApp {
-            background-color: #f7f9fc;
+            background-color: #f8fafc;
             font-family: 'Inter', sans-serif;
+            padding: 2rem 1rem;
         }
-        .stDownloadButton button {
+
+        /* Title styling */
+        h1 {
+            color: #1a1a1a;
+            text-align: center;
+            font-size: clamp(1.4rem, 4vw, 2.2rem);
+            font-weight: 650;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Subtext below title */
+        .stMarkdown p {
+            text-align: center;
+            font-size: clamp(0.9rem, 2.5vw, 1rem);
+            color: #3a3a3a;
+            margin-bottom: 1.5rem;
+        }
+
+        /* File uploader box */
+        .stFileUploader {
+            border: 2px dashed #0078ff !important;
+            border-radius: 10px !important;
+            background-color: #ffffff !important;
+            padding: 1.2rem !important;
+        }
+
+        /* Buttons */
+        .stDownloadButton button, .stButton button {
             background-color: #0078ff !important;
             color: white !important;
-            border-radius: 8px;
-            padding: 10px 18px;
-            font-weight: 600;
+            border-radius: 8px !important;
+            padding: 0.7rem 1.4rem !important;
+            font-weight: 600 !important;
+            border: none !important;
         }
-        .stFileUploader {
-            border: 2px dashed #0078ff;
-            border-radius: 10px;
-            background-color: #ffffff;
-            padding: 15px;
+
+        /* Success/info messages */
+        .stAlert {
+            border-radius: 10px !important;
+            padding: 1rem !important;
+        }
+
+        /* Reduce padding on mobile */
+        @media (max-width: 600px) {
+            .stApp {
+                padding: 1rem 0.5rem;
+            }
+            .stFileUploader {
+                padding: 0.8rem !important;
+            }
         }
     </style>
 """, unsafe_allow_html=True)
+
 
 uploaded_file = st.file_uploader("📤 Upload Excel or CSV file", type=["xlsx", "csv"])
 
