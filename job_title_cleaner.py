@@ -43,7 +43,8 @@ def map_title(raw_title, mapping, known_titles_embed):
         return 'Unknown - Needs Review', True
 
 def process_excel(input_path, output_path, mapping_path, dept_json_output,
-                  target_column, sheet_name=None, return_df=False):
+                  target_column, sheet_name=None, return_df=False, return_changes=False):
+    # Load file
     if input_path.endswith('.xlsx'):
         if sheet_name:
             df = pd.read_excel(input_path, sheet_name=sheet_name)
@@ -71,6 +72,19 @@ def process_excel(input_path, output_path, mapping_path, dept_json_output,
     df[normalized_col] = standardized
     df.to_excel(output_path, index=False)
 
+    # Compute similarity scores for difference detection
+    raw_embeds = model.encode(df[target_column].astype(str).tolist(), normalize_embeddings=True)
+    norm_embeds = model.encode(df[normalized_col].astype(str).tolist(), normalize_embeddings=True)
+    similarity_scores = util.cos_sim(raw_embeds, norm_embeds).diagonal().cpu().numpy()
+    df["Change Score"] = 1 - similarity_scores  # Higher = more changed
+
+    # Identify major changes
+    major_changes = (
+        df[[target_column, normalized_col, "Change Score"]]
+        .sort_values("Change Score", ascending=False)
+        .head(5)
+    )
+
     # Optional department grouping
     if 'Department*' in df.columns:
         grouped = (
@@ -84,4 +98,6 @@ def process_excel(input_path, output_path, mapping_path, dept_json_output,
             json.dump(grouped, f, indent=4)
 
     if return_df:
+        if return_changes:
+            return df, major_changes
         return df
