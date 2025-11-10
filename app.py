@@ -10,7 +10,7 @@ st.set_page_config(page_title="Job Title Normalizer", page_icon="🧹", layout="
 st.markdown("""
 <style>
 .stApp { background-color:#f8fafc; font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
-.block-container { max-width: 820px; margin: 0 auto; padding-top: 2rem; }
+.block-container { max-width: 900px; margin: 0 auto; padding-top: 2rem; }
 header[data-testid="stHeader"]{ background:transparent !important; }
 .jt-title { color:#111; text-align:center; font-size:clamp(1.6rem,4vw,2.4rem); font-weight:700; margin-bottom:0.35rem; }
 .jt-subtitle { text-align:center; color:#333; font-size:clamp(.95rem,2.4vw,1.1rem); margin-bottom:1.25rem; }
@@ -25,10 +25,9 @@ header[data-testid="stHeader"]{ background:transparent !important; }
 
 # ---- Header ----
 st.markdown("<h1 class='jt-title'>Job Title Normalizer</h1>", unsafe_allow_html=True)
-st.markdown("<p class='jt-subtitle'>Upload your Excel or CSV file, choose the sheet and column you want to standardize, and download the cleaned version.</p>", unsafe_allow_html=True)
+st.markdown("<p class='jt-subtitle'>Upload your Excel or CSV file, choose the sheet and column you want to standardize, and view a preview before downloading the cleaned version.</p>", unsafe_allow_html=True)
 
 # ---- Upload ----
-# st.markdown("<label class='jt-uplabel'>Upload Excel or CSV file</label>", unsafe_allow_html=True)
 uploaded_file = st.file_uploader(label="", type=["xlsx", "csv"], label_visibility="collapsed")
 
 if uploaded_file is not None:
@@ -43,11 +42,13 @@ if uploaded_file is not None:
 
             if selected_sheet:
                 df = pd.read_excel(excel_file, sheet_name=selected_sheet)
-                # st.success(f"Loaded sheet: {selected_sheet}")
                 columns = list(df.columns)
                 selected_column = st.selectbox("Select the column to clean:", options=columns)
 
                 if st.button("Clean Selected Column"):
+                    st.subheader("Preview Before Cleaning")
+                    st.dataframe(df[[selected_column]].head())
+
                     with st.spinner("Processing your file... Please wait ⏳"):
                         with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
                             uploaded_file.seek(0)
@@ -57,16 +58,22 @@ if uploaded_file is not None:
                         temp_output = tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx').name
                         dept_json_output = tempfile.NamedTemporaryFile(delete=False, suffix='.json').name
 
-                        process_excel(
+                        # Process file and return cleaned DataFrame
+                        cleaned_df = process_excel(
                             input_path=temp_input,
                             output_path=temp_output,
                             mapping_path="canonical_mapping_raw.json",
                             dept_json_output=dept_json_output,
                             target_column=selected_column,
-                            sheet_name=selected_sheet
+                            sheet_name=selected_sheet,
+                            return_df=True
                         )
 
                         st.success(f"Cleaning complete for sheet '{selected_sheet}' and column '{selected_column}'.")
+
+                        st.subheader("Preview After Cleaning")
+                        preview_cols = [selected_column, f"{selected_column}_Cleaned"]
+                        st.dataframe(cleaned_df[preview_cols].head())
 
                         with open(temp_output, "rb") as f:
                             st.download_button(
@@ -76,8 +83,6 @@ if uploaded_file is not None:
                                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                             )
 
-                        # st.info("Job titles have been standardized using AI-based matching and your canonical dictionary.")
-
         # --- For CSV files ---
         elif file_ext == ".csv":
             df = pd.read_csv(uploaded_file)
@@ -85,6 +90,9 @@ if uploaded_file is not None:
             selected_column = st.selectbox("Select the column to clean:", options=columns)
 
             if st.button("Clean Selected Column"):
+                st.subheader("Preview Before Cleaning")
+                st.dataframe(df[[selected_column]].head())
+
                 with st.spinner("Processing your file... Please wait ⏳"):
                     with tempfile.NamedTemporaryFile(delete=False, suffix='.csv') as tmp:
                         tmp.write(uploaded_file.getbuffer())
@@ -93,16 +101,21 @@ if uploaded_file is not None:
                     temp_output = tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx').name
                     dept_json_output = tempfile.NamedTemporaryFile(delete=False, suffix='.json').name
 
-                    process_excel(
+                    cleaned_df = process_excel(
                         input_path=temp_input,
                         output_path=temp_output,
                         mapping_path="canonical_mapping_raw.json",
                         dept_json_output=dept_json_output,
                         target_column=selected_column,
-                        sheet_name=None
+                        sheet_name=None,
+                        return_df=True
                     )
 
                     st.success(f"Cleaning complete for column '{selected_column}'.")
+
+                    st.subheader("Preview After Cleaning")
+                    preview_cols = [selected_column, f"{selected_column}_Cleaned"]
+                    st.dataframe(cleaned_df[preview_cols].head())
 
                     with open(temp_output, "rb") as f:
                         st.download_button(
@@ -111,8 +124,6 @@ if uploaded_file is not None:
                             file_name="Cleaned_Employee_Data.xlsx",
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                         )
-
-                    st.info("Job titles have been standardized using AI-based matching and the canonical dictionary.")
 
         else:
             st.error("Unsupported file format. Please upload a .xlsx or .csv file.")
