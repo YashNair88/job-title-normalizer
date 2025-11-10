@@ -52,7 +52,7 @@ if uploaded_file is not None:
             dept_json_output=dept_json_output
         )
 
-        st.success("✅ Cleaning complete! Click below to download your cleaned file:")
+        st.success("✅ Cleaning complete! Click below to download your cleaned file.")
 
         with open(temp_output, "rb") as f:
             st.download_button(
