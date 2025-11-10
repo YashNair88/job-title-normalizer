@@ -63,6 +63,6 @@ if uploaded_file is not None:
             )
 
         st.markdown("---")
-        st.info("✨ Job titles have been standardized using AI-based matching and your canonical dictionary.")
+        # st.info("✨ Job titles have been standardized using AI-based matching and your canonical dictionary.")
 else:
     st.info("Please upload a file to begin.")
