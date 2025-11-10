@@ -24,7 +24,7 @@ header[data-testid="stHeader"]{ background:transparent !important; }
 
 # ---- Header ----
 st.markdown("<h1 class='jt-title'>Job Title Normalizer</h1>", unsafe_allow_html=True)
-st.markdown("<p class='jt-subtitle'>Upload your Excel or CSV file, choose the sheet and column you want to standardize, and view the top changed results before downloading the cleaned version.</p>", unsafe_allow_html=True)
+st.markdown("<p class='jt-subtitle'>Clean and standardize job titles instantly from your Excel or CSV file.</p>", unsafe_allow_html=True)
 
 # ---- Upload ----
 uploaded_file = st.file_uploader(label="", type=["xlsx", "csv"], label_visibility="collapsed")
