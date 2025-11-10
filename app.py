@@ -28,7 +28,7 @@ st.markdown("<h1 class='jt-title'>Job Title Normalizer</h1>", unsafe_allow_html=
 st.markdown("<p class='jt-subtitle'>Upload your Excel or CSV file, choose the sheet and column you want to standardize, and download the cleaned version.</p>", unsafe_allow_html=True)
 
 # ---- Upload ----
-st.markdown("<label class='jt-uplabel'>Upload Excel or CSV file</label>", unsafe_allow_html=True)
+# st.markdown("<label class='jt-uplabel'>Upload Excel or CSV file</label>", unsafe_allow_html=True)
 uploaded_file = st.file_uploader(label="", type=["xlsx", "csv"], label_visibility="collapsed")
 
 if uploaded_file is not None:
@@ -76,7 +76,7 @@ if uploaded_file is not None:
                                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                             )
 
-                        st.info("Job titles have been standardized using AI-based matching and your canonical dictionary.")
+                        # st.info("Job titles have been standardized using AI-based matching and your canonical dictionary.")
 
         # --- For CSV files ---
         elif file_ext == ".csv":
