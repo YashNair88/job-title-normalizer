@@ -1,4 +1,4 @@
-# job-title-normalizer
+# Job Title Normalizer
 
 The Job Title Normalizer is a web-based application designed to automatically clean and standardize job titles from Excel or CSV files. It combines rule-based mapping with semantic similarity using transformer embeddings to ensure accuracy and consistency across datasets.
 
