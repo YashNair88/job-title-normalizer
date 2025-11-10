@@ -9,26 +9,25 @@ st.set_page_config(page_title="Job Title Normalizer", page_icon="🧹", layout="
 # Custom CSS to fix title visibility on all devices and themes
 st.markdown("""
     <style>
-        /* Reset page background */
+        /* Base page */
         .stApp {
             background-color: #f8fafc;
             font-family: 'Inter', sans-serif;
             padding-top: 2rem;
         }
 
-        /* Override Streamlit dark header */
+        /* Hide Streamlit dark header bar */
         header[data-testid="stHeader"] {
             background: transparent !important;
-            color: transparent !important;
         }
 
-        /* Main title styling */
+        /* Title */
         h1 {
             color: #111111 !important;
             text-align: center !important;
             font-size: clamp(1.6rem, 4vw, 2.4rem) !important;
             font-weight: 700 !important;
-            margin-bottom: 0.3rem !important;
+            margin-bottom: 0.4rem !important;
         }
 
         /* Subtitle */
@@ -39,7 +38,14 @@ st.markdown("""
             margin-bottom: 2rem;
         }
 
-        /* File uploader */
+        /* File uploader box */
+        section[data-testid="stFileUploader"] > label div {
+            color: #222222 !important; /* <-- makes “Upload Excel or CSV file” visible */
+            font-weight: 500 !important;
+            font-size: 1rem !important;
+            margin-bottom: 0.3rem !important;
+        }
+
         .stFileUploader {
             border: 2px dashed #0078ff !important;
             border-radius: 10px !important;
@@ -58,7 +64,13 @@ st.markdown("""
             border: none !important;
         }
 
-        /* Adjust padding for mobile */
+        /* Info box */
+        .stAlert {
+            border-radius: 10px !important;
+            padding: 1rem !important;
+        }
+
+        /* Mobile optimization */
         @media (max-width: 600px) {
             .stApp {
                 padding: 1rem 0.5rem;
@@ -69,6 +81,7 @@ st.markdown("""
         }
     </style>
 """, unsafe_allow_html=True)
+
 
 
 # Title & subtitle (these will now be visible everywhere)
