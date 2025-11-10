@@ -65,7 +65,7 @@ if uploaded_file is not None:
                         cleaned_df, major_changes_df = process_excel(
                             input_path=temp_input,
                             output_path=temp_output,
-                            mapping_path="canonical_mapping_raw.json",
+                            mapping_path="canonical_mapping.json",
                             dept_json_output=dept_json_output,
                             target_column=selected_column,
                             sheet_name=selected_sheet,
