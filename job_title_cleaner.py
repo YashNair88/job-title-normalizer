@@ -118,16 +118,16 @@ def process_excel(input_path, output_path, mapping_path, dept_json_output,
     )
 
     # --- Optional department grouping ---
-    if 'Department*' in df.columns:
-        grouped = (
-            df[df[normalized_col] != 'Unknown - Needs Review']
-            .groupby('Department*')[normalized_col]
-            .unique()
-            .apply(sorted)
-            .to_dict()
-        )
-        with open(dept_json_output, 'w', encoding='utf-8') as f:
-            json.dump(grouped, f, indent=4)
+    # if 'Department*' in df.columns:
+    #     grouped = (
+    #         df[df[normalized_col] != 'Unknown - Needs Review']
+    #         .groupby('Department*')[normalized_col]
+    #         .unique()
+    #         .apply(sorted)
+    #         .to_dict()
+    #     )
+    #     with open(dept_json_output, 'w', encoding='utf-8') as f:
+    #         json.dump(grouped, f, indent=4)
 
     # --- Return ---
     if return_df:
