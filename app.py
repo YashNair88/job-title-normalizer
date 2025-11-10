@@ -47,7 +47,10 @@ if uploaded_file is not None:
                 # Show selected column preview
                 if selected_column:
                     st.subheader("Selected Column")
-                    st.dataframe(df[[selected_column]].head())
+                    preview_df = df[[selected_column]].head().copy()
+                    preview_df.index = range(1, len(preview_df) + 1)  # start index at 1
+                    preview_df.index.name = ""  # remove index header
+                    st.dataframe(preview_df)
 
                 if st.button("Clean Selected Column"):
                     with st.spinner("Processing your file... Please wait ⏳"):
@@ -72,8 +75,11 @@ if uploaded_file is not None:
 
                         st.success(f"Cleaning complete for column '{selected_column}'.")
 
-                        st.subheader("Preview")
-                        st.dataframe(major_changes_df)
+                        st.subheader("Preview (Top 5 Most Changed Rows)")
+                        preview_changes = major_changes_df.copy()
+                        preview_changes.index = range(1, len(preview_changes) + 1)  # start index at 1
+                        preview_changes.index.name = ""  # remove index header
+                        st.dataframe(preview_changes)
 
                         with open(temp_output, "rb") as f:
                             st.download_button(
