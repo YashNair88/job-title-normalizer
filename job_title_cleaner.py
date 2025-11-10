@@ -4,7 +4,6 @@ import json
 import re
 from sentence_transformers import SentenceTransformer, util
 
-# Global model
 model = SentenceTransformer('all-mpnet-base-v2')
 SIMILARITY_THRESHOLD = 0.75
 
@@ -35,38 +34,35 @@ def map_title(raw_title, mapping, known_titles_embed):
     raw_emb = model.encode(normalized, normalize_embeddings=True)
     known_keys = list(mapping.keys())
     similarities = util.cos_sim(raw_emb, known_titles_embed)[0].cpu().numpy()
-    best_match_idx = int(np.argmax(similarities))
-    best_score = similarities[best_match_idx]
+    best_idx = int(np.argmax(similarities))
+    best_score = similarities[best_idx]
 
     if best_score >= SIMILARITY_THRESHOLD:
-        matched = mapping[known_keys[best_match_idx]]
-        return matched, False
+        return mapping[known_keys[best_idx]], False
     else:
         return 'Unknown - Needs Review', True
 
-def process_excel(input_path, output_path, mapping_path, dept_json_output, target_column, sheet_name=None):
-    # Load data
+def process_excel(input_path, output_path, mapping_path, dept_json_output,
+                  target_column, sheet_name=None, return_df=False):
     if input_path.endswith('.xlsx'):
         if sheet_name:
             df = pd.read_excel(input_path, sheet_name=sheet_name)
         else:
-            xls = pd.ExcelFile(input_path)
-            df = pd.read_excel(xls, xls.sheet_names[0])
+            df = pd.read_excel(input_path)
     else:
         df = pd.read_csv(input_path)
 
     if target_column not in df.columns:
-        raise ValueError(f"Column '{target_column}' not found in {sheet_name or 'file'}.")
+        raise ValueError(f"Column '{target_column}' not found.")
 
-    # Load mapping
     mapping = load_mapping(mapping_path)
-    keys = list(mapping.keys())
-    known_embeds = model.encode(keys, normalize_embeddings=True)
+    known_keys = list(mapping.keys())
+    known_embeddings = model.encode(known_keys, normalize_embeddings=True)
 
     standardized, unknowns = [], set()
 
     for raw in df[target_column]:
-        mapped, is_unknown = map_title(str(raw), mapping, known_embeds)
+        mapped, is_unknown = map_title(str(raw), mapping, known_embeddings)
         standardized.append(capitalize_title(mapped))
         if is_unknown:
             unknowns.add(normalize_title(raw))
@@ -74,6 +70,7 @@ def process_excel(input_path, output_path, mapping_path, dept_json_output, targe
     df[f"{target_column}_Cleaned"] = standardized
     df.to_excel(output_path, index=False)
 
+    # Optional department grouping
     if 'Department*' in df.columns:
         grouped = (
             df[df[f"{target_column}_Cleaned"] != 'Unknown - Needs Review']
@@ -85,5 +82,5 @@ def process_excel(input_path, output_path, mapping_path, dept_json_output, targe
         with open(dept_json_output, 'w', encoding='utf-8') as f:
             json.dump(grouped, f, indent=4)
 
-    if unknowns:
-        print(f"Unknown entries found in column '{target_column}' ({len(unknowns)} values).")
+    if return_df:
+        return df
