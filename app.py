@@ -9,6 +9,28 @@ st.set_page_config(page_title="Job Title Normalizer", page_icon="🧹", layout="
 st.title("🧹 Job Title Normalizer")
 st.markdown("Upload your Excel or CSV file to automatically clean and standardize job titles.")
 
+st.markdown("""
+    <style>
+        .stApp {
+            background-color: #f7f9fc;
+            font-family: 'Inter', sans-serif;
+        }
+        .stDownloadButton button {
+            background-color: #0078ff !important;
+            color: white !important;
+            border-radius: 8px;
+            padding: 10px 18px;
+            font-weight: 600;
+        }
+        .stFileUploader {
+            border: 2px dashed #0078ff;
+            border-radius: 10px;
+            background-color: #ffffff;
+            padding: 15px;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
 uploaded_file = st.file_uploader("📤 Upload Excel or CSV file", type=["xlsx", "csv"])
 
 if uploaded_file is not None:
