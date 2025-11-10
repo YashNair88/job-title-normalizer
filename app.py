@@ -43,7 +43,7 @@ if uploaded_file is not None:
 
             if selected_sheet:
                 df = pd.read_excel(excel_file, sheet_name=selected_sheet)
-                st.success(f"Loaded sheet: {selected_sheet}")
+                # st.success(f"Loaded sheet: {selected_sheet}")
                 columns = list(df.columns)
                 selected_column = st.selectbox("Select the column to clean:", options=columns)
 
