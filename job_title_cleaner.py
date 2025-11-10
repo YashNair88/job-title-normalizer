@@ -5,8 +5,8 @@ import re
 import streamlit as st
 from sentence_transformers import SentenceTransformer, util
 
-# --- Fast lightweight model for speed ---
-model = SentenceTransformer('all-MiniLM-L6-v2')
+# --- Model & threshold ---
+model = SentenceTransformer('all-mpnet-base-v2')  # high-accuracy model
 SIMILARITY_THRESHOLD = 0.75
 
 # --- Load mapping ---
@@ -30,6 +30,7 @@ def capitalize_title(title):
 def normalize_title(title):
     return str(title).lower().strip()
 
+# --- Title mapping logic ---
 def map_title(raw_title, mapping, known_titles_embed, known_keys):
     normalized = normalize_title(raw_title)
     if normalized in mapping:
@@ -61,13 +62,14 @@ def process_excel(input_path, output_path, mapping_path, dept_json_output,
     if target_column not in df.columns:
         raise ValueError(f"Column '{target_column}' not found in file.")
 
+    # --- Load mapping ---
     mapping = load_mapping(mapping_path)
     known_keys = list(mapping.keys())
     known_embeddings = model.encode(known_keys, normalize_embeddings=True)
 
     standardized, unknowns = [], set()
 
-    # --- Progress bar setup ---
+    # --- Progress bar ---
     total_rows = len(df)
     progress_bar = st.progress(0)
     status_text = st.empty()
@@ -78,28 +80,28 @@ def process_excel(input_path, output_path, mapping_path, dept_json_output,
         if is_unknown:
             unknowns.add(normalize_title(raw))
 
-        # Update progress every 100 rows for efficiency
         if (i + 1) % 100 == 0 or (i + 1) == total_rows:
             percent = int(((i + 1) / total_rows) * 100)
             progress_bar.progress(percent)
             status_text.text(f"Processing row {i + 1} of {total_rows}...")
 
     progress_bar.progress(100)
-    status_text.text("Processing complete ✅")
+    status_text.text("Processing complete!")
 
-    # --- Save results ---
+    # --- Add normalized column ---
     normalized_col = f"Normalized {target_column}"
     df[normalized_col] = standardized
     df.to_excel(output_path, index=False)
 
-    # --- Compute similarity for top 5 changes (on sample for speed) ---
+    # --- Compute similarity for top 5 most changed rows ---
     invalid_values = ["-", "nan", "none", "null", "na", ""]
     filtered_df = df[
         (~df[target_column].astype(str).str.lower().isin(invalid_values))
         & (~df[normalized_col].astype(str).str.lower().isin(invalid_values))
     ]
 
-    sample_df = filtered_df.sample(min(len(filtered_df), 500), random_state=42)
+    # Sample subset for faster similarity comparison
+    sample_df = filtered_df.sample(min(len(filtered_df), 400), random_state=42)
     raw_list = sample_df[target_column].astype(str).tolist()
     norm_list = sample_df[normalized_col].astype(str).tolist()
 
@@ -108,7 +110,6 @@ def process_excel(input_path, output_path, mapping_path, dept_json_output,
     similarity_scores = util.cos_sim(raw_embeds, norm_embeds).diagonal().cpu().numpy()
     sample_df["Change Score"] = 1 - similarity_scores
 
-    # --- Top 5 most changed rows (no score in preview) ---
     major_changes = (
         sample_df[[target_column, normalized_col, "Change Score"]]
         .sort_values("Change Score", ascending=False)
@@ -116,6 +117,7 @@ def process_excel(input_path, output_path, mapping_path, dept_json_output,
         .drop(columns=["Change Score"])
         .reset_index(drop=True)
     )
+    major_changes.index = major_changes.index + 1  # start from 1
 
     # --- Optional department grouping ---
     # if 'Department*' in df.columns:
@@ -129,7 +131,7 @@ def process_excel(input_path, output_path, mapping_path, dept_json_output,
     #     with open(dept_json_output, 'w', encoding='utf-8') as f:
     #         json.dump(grouped, f, indent=4)
 
-    # --- Return ---
+    # --- Return results ---
     if return_df:
         if return_changes:
             return df, major_changes
