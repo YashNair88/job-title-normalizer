@@ -70,7 +70,7 @@ if uploaded_file is not None:
                             return_changes=True
                         )
 
-                        st.success(f"Cleaning complete for sheet '{selected_sheet}' and column '{selected_column}'.")
+                        st.success(f"Cleaning complete for column '{selected_column}'.")
 
                         st.subheader("Preview")
                         st.dataframe(major_changes_df)
