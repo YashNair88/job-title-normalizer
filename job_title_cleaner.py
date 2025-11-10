@@ -73,14 +73,24 @@ def process_excel(input_path, output_path, mapping_path, dept_json_output,
     df.to_excel(output_path, index=False)
 
     # Compute similarity scores for difference detection
-    raw_embeds = model.encode(df[target_column].astype(str).tolist(), normalize_embeddings=True)
-    norm_embeds = model.encode(df[normalized_col].astype(str).tolist(), normalize_embeddings=True)
+    raw_list = df[target_column].astype(str).fillna("").tolist()
+    norm_list = df[normalized_col].astype(str).fillna("").tolist()
+
+    raw_embeds = model.encode(raw_list, normalize_embeddings=True)
+    norm_embeds = model.encode(norm_list, normalize_embeddings=True)
     similarity_scores = util.cos_sim(raw_embeds, norm_embeds).diagonal().cpu().numpy()
     df["Change Score"] = 1 - similarity_scores  # Higher = more changed
 
-    # Identify major changes
+    # Filter out invalid or blank rows for preview
+    invalid_values = ["-", "nan", "none", "null", "na", ""]
+    filtered_df = df[
+        (~df[target_column].astype(str).str.lower().isin(invalid_values))
+        & (~df[normalized_col].astype(str).str.lower().isin(invalid_values))
+    ]
+
+    # Identify top 5 meaningful changes
     major_changes = (
-        df[[target_column, normalized_col, "Change Score"]]
+        filtered_df[[target_column, normalized_col, "Change Score"]]
         .sort_values("Change Score", ascending=False)
         .head(5)
     )
