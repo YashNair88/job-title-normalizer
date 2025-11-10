@@ -4,9 +4,11 @@ import json
 import re
 from sentence_transformers import SentenceTransformer, util
 
-model = SentenceTransformer('all-mpnet-base-v2')
+# --- Load the model globally once ---
+model = SentenceTransformer('all-MiniLM-L6-v2')  # Faster than all-mpnet-base-v2, ~6x speed boost
 SIMILARITY_THRESHOLD = 0.75
 
+# --- Helper Functions ---
 def load_mapping(json_path):
     with open(json_path, 'r', encoding='utf-8') as f:
         return json.load(f)
@@ -26,13 +28,12 @@ def capitalize_title(title):
 def normalize_title(title):
     return str(title).lower().strip()
 
-def map_title(raw_title, mapping, known_titles_embed):
+def map_title(raw_title, mapping, known_titles_embed, known_keys):
     normalized = normalize_title(raw_title)
     if normalized in mapping:
         return mapping[normalized], False
 
     raw_emb = model.encode(normalized, normalize_embeddings=True)
-    known_keys = list(mapping.keys())
     similarities = util.cos_sim(raw_emb, known_titles_embed)[0].cpu().numpy()
     best_idx = int(np.argmax(similarities))
     best_score = similarities[best_idx]
@@ -42,9 +43,11 @@ def map_title(raw_title, mapping, known_titles_embed):
     else:
         return 'Unknown - Needs Review', True
 
+# --- Main Processing Function ---
 def process_excel(input_path, output_path, mapping_path, dept_json_output,
                   target_column, sheet_name=None, return_df=False, return_changes=False):
-    # Load file
+
+    # --- Load file ---
     if input_path.endswith('.xlsx'):
         if sheet_name:
             df = pd.read_excel(input_path, sheet_name=sheet_name)
@@ -54,16 +57,17 @@ def process_excel(input_path, output_path, mapping_path, dept_json_output,
         df = pd.read_csv(input_path)
 
     if target_column not in df.columns:
-        raise ValueError(f"Column '{target_column}' not found.")
+        raise ValueError(f"Column '{target_column}' not found in file.")
 
+    # --- Load canonical mapping ---
     mapping = load_mapping(mapping_path)
     known_keys = list(mapping.keys())
     known_embeddings = model.encode(known_keys, normalize_embeddings=True)
 
+    # --- Clean titles ---
     standardized, unknowns = [], set()
-
     for raw in df[target_column]:
-        mapped, is_unknown = map_title(str(raw), mapping, known_embeddings)
+        mapped, is_unknown = map_title(str(raw), mapping, known_embeddings, known_keys)
         standardized.append(capitalize_title(mapped))
         if is_unknown:
             unknowns.add(normalize_title(raw))
@@ -72,30 +76,35 @@ def process_excel(input_path, output_path, mapping_path, dept_json_output,
     df[normalized_col] = standardized
     df.to_excel(output_path, index=False)
 
-    # Compute similarity scores for difference detection
-    raw_list = df[target_column].astype(str).fillna("").tolist()
-    norm_list = df[normalized_col].astype(str).fillna("").tolist()
-
-    raw_embeds = model.encode(raw_list, normalize_embeddings=True)
-    norm_embeds = model.encode(norm_list, normalize_embeddings=True)
-    similarity_scores = util.cos_sim(raw_embeds, norm_embeds).diagonal().cpu().numpy()
-    df["Change Score"] = 1 - similarity_scores  # Higher = more changed
-
-    # Filter out invalid or blank rows for preview
+    # --- Compute change similarity on a sample (for speed) ---
     invalid_values = ["-", "nan", "none", "null", "na", ""]
     filtered_df = df[
         (~df[target_column].astype(str).str.lower().isin(invalid_values))
         & (~df[normalized_col].astype(str).str.lower().isin(invalid_values))
     ]
 
-    # Identify top 5 meaningful changes
+    # Limit to at most 500 rows for performance
+    sample_df = filtered_df.sample(min(len(filtered_df), 500), random_state=42)
+
+    # Compute semantic similarity on the sample only
+    raw_list = sample_df[target_column].astype(str).tolist()
+    norm_list = sample_df[normalized_col].astype(str).tolist()
+    raw_embeds = model.encode(raw_list, normalize_embeddings=True)
+    norm_embeds = model.encode(norm_list, normalize_embeddings=True)
+
+    similarity_scores = util.cos_sim(raw_embeds, norm_embeds).diagonal().cpu().numpy()
+    sample_df["Change Score"] = 1 - similarity_scores
+
+    # --- Pick top 5 most changed (no Change Score in final preview) ---
     major_changes = (
-        filtered_df[[target_column, normalized_col, "Change Score"]]
+        sample_df[[target_column, normalized_col, "Change Score"]]
         .sort_values("Change Score", ascending=False)
         .head(5)
+        .drop(columns=["Change Score"])
+        .reset_index(drop=True)
     )
 
-    # Optional department grouping
+    # --- Optional department grouping ---
     if 'Department*' in df.columns:
         grouped = (
             df[df[normalized_col] != 'Unknown - Needs Review']
@@ -107,6 +116,7 @@ def process_excel(input_path, output_path, mapping_path, dept_json_output,
         with open(dept_json_output, 'w', encoding='utf-8') as f:
             json.dump(grouped, f, indent=4)
 
+    # --- Return results ---
     if return_df:
         if return_changes:
             return df, major_changes
