@@ -2,17 +2,19 @@ import pandas as pd
 import numpy as np
 import json
 import re
+import streamlit as st
 from sentence_transformers import SentenceTransformer, util
 
-# --- Load the model globally once ---
-model = SentenceTransformer('all-MiniLM-L6-v2')  # Faster than all-mpnet-base-v2, ~6x speed boost
+# --- Fast lightweight model for speed ---
+model = SentenceTransformer('all-MiniLM-L6-v2')
 SIMILARITY_THRESHOLD = 0.75
 
-# --- Helper Functions ---
+# --- Load mapping ---
 def load_mapping(json_path):
     with open(json_path, 'r', encoding='utf-8') as f:
         return json.load(f)
 
+# --- Text formatting utilities ---
 def capitalize_title(title):
     words = str(title).split()
     corrected = []
@@ -43,7 +45,7 @@ def map_title(raw_title, mapping, known_titles_embed, known_keys):
     else:
         return 'Unknown - Needs Review', True
 
-# --- Main Processing Function ---
+# --- Main processing function ---
 def process_excel(input_path, output_path, mapping_path, dept_json_output,
                   target_column, sheet_name=None, return_df=False, return_changes=False):
 
@@ -59,43 +61,54 @@ def process_excel(input_path, output_path, mapping_path, dept_json_output,
     if target_column not in df.columns:
         raise ValueError(f"Column '{target_column}' not found in file.")
 
-    # --- Load canonical mapping ---
     mapping = load_mapping(mapping_path)
     known_keys = list(mapping.keys())
     known_embeddings = model.encode(known_keys, normalize_embeddings=True)
 
-    # --- Clean titles ---
     standardized, unknowns = [], set()
-    for raw in df[target_column]:
+
+    # --- Progress bar setup ---
+    total_rows = len(df)
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+
+    for i, raw in enumerate(df[target_column]):
         mapped, is_unknown = map_title(str(raw), mapping, known_embeddings, known_keys)
         standardized.append(capitalize_title(mapped))
         if is_unknown:
             unknowns.add(normalize_title(raw))
 
+        # Update progress every 100 rows for efficiency
+        if (i + 1) % 100 == 0 or (i + 1) == total_rows:
+            percent = int(((i + 1) / total_rows) * 100)
+            progress_bar.progress(percent)
+            status_text.text(f"Processing row {i + 1} of {total_rows}...")
+
+    progress_bar.progress(100)
+    status_text.text("Processing complete ✅")
+
+    # --- Save results ---
     normalized_col = f"Normalized {target_column}"
     df[normalized_col] = standardized
     df.to_excel(output_path, index=False)
 
-    # --- Compute change similarity on a sample (for speed) ---
+    # --- Compute similarity for top 5 changes (on sample for speed) ---
     invalid_values = ["-", "nan", "none", "null", "na", ""]
     filtered_df = df[
         (~df[target_column].astype(str).str.lower().isin(invalid_values))
         & (~df[normalized_col].astype(str).str.lower().isin(invalid_values))
     ]
 
-    # Limit to at most 500 rows for performance
     sample_df = filtered_df.sample(min(len(filtered_df), 500), random_state=42)
-
-    # Compute semantic similarity on the sample only
     raw_list = sample_df[target_column].astype(str).tolist()
     norm_list = sample_df[normalized_col].astype(str).tolist()
+
     raw_embeds = model.encode(raw_list, normalize_embeddings=True)
     norm_embeds = model.encode(norm_list, normalize_embeddings=True)
-
     similarity_scores = util.cos_sim(raw_embeds, norm_embeds).diagonal().cpu().numpy()
     sample_df["Change Score"] = 1 - similarity_scores
 
-    # --- Pick top 5 most changed (no Change Score in final preview) ---
+    # --- Top 5 most changed rows (no score in preview) ---
     major_changes = (
         sample_df[[target_column, normalized_col, "Change Score"]]
         .sort_values("Change Score", ascending=False)
@@ -105,18 +118,18 @@ def process_excel(input_path, output_path, mapping_path, dept_json_output,
     )
 
     # --- Optional department grouping ---
-    # if 'Department*' in df.columns:
-    #     grouped = (
-    #         df[df[normalized_col] != 'Unknown - Needs Review']
-    #         .groupby('Department*')[normalized_col]
-    #         .unique()
-    #         .apply(sorted)
-    #         .to_dict()
-    #     )
-    #     with open(dept_json_output, 'w', encoding='utf-8') as f:
-    #         json.dump(grouped, f, indent=4)
+    if 'Department*' in df.columns:
+        grouped = (
+            df[df[normalized_col] != 'Unknown - Needs Review']
+            .groupby('Department*')[normalized_col]
+            .unique()
+            .apply(sorted)
+            .to_dict()
+        )
+        with open(dept_json_output, 'w', encoding='utf-8') as f:
+            json.dump(grouped, f, indent=4)
 
-    # --- Return results ---
+    # --- Return ---
     if return_df:
         if return_changes:
             return df, major_changes
