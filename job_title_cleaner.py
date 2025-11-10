@@ -67,14 +67,15 @@ def process_excel(input_path, output_path, mapping_path, dept_json_output,
         if is_unknown:
             unknowns.add(normalize_title(raw))
 
-    df[f"{target_column}_Cleaned"] = standardized
+    normalized_col = f"Normalized {target_column}"
+    df[normalized_col] = standardized
     df.to_excel(output_path, index=False)
 
     # Optional department grouping
     if 'Department*' in df.columns:
         grouped = (
-            df[df[f"{target_column}_Cleaned"] != 'Unknown - Needs Review']
-            .groupby('Department*')[f"{target_column}_Cleaned"]
+            df[df[normalized_col] != 'Unknown - Needs Review']
+            .groupby('Department*')[normalized_col]
             .unique()
             .apply(sorted)
             .to_dict()
