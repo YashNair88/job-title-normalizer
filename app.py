@@ -9,25 +9,26 @@ st.set_page_config(page_title="Job Title Normalizer", page_icon="🧹", layout="
 # Custom CSS to fix title visibility on all devices and themes
 st.markdown("""
     <style>
-        /* Base page */
+        /* Reset page background */
         .stApp {
             background-color: #f8fafc;
             font-family: 'Inter', sans-serif;
             padding-top: 2rem;
         }
 
-        /* Hide Streamlit dark header bar */
+        /* Override Streamlit dark header */
         header[data-testid="stHeader"] {
             background: transparent !important;
+            color: transparent !important;
         }
 
-        /* Title */
+        /* Main title styling */
         h1 {
             color: #111111 !important;
             text-align: center !important;
             font-size: clamp(1.6rem, 4vw, 2.4rem) !important;
             font-weight: 700 !important;
-            margin-bottom: 0.4rem !important;
+            margin-bottom: 0.3rem !important;
         }
 
         /* Subtitle */
@@ -38,14 +39,7 @@ st.markdown("""
             margin-bottom: 2rem;
         }
 
-        /* File uploader box */
-        section[data-testid="stFileUploader"] > label div {
-            color: #222222 !important; /* <-- makes “Upload Excel or CSV file” visible */
-            font-weight: 500 !important;
-            font-size: 1rem !important;
-            margin-bottom: 0.3rem !important;
-        }
-
+        /* File uploader */
         .stFileUploader {
             border: 2px dashed #0078ff !important;
             border-radius: 10px !important;
@@ -64,13 +58,7 @@ st.markdown("""
             border: none !important;
         }
 
-        /* Info box */
-        .stAlert {
-            border-radius: 10px !important;
-            padding: 1rem !important;
-        }
-
-        /* Mobile optimization */
+        /* Adjust padding for mobile */
         @media (max-width: 600px) {
             .stApp {
                 padding: 1rem 0.5rem;
@@ -81,6 +69,7 @@ st.markdown("""
         }
     </style>
 """, unsafe_allow_html=True)
+
 
 # Title & subtitle (these will now be visible everywhere)
 st.markdown("<h1>Job Title Normalizer</h1>", unsafe_allow_html=True)
