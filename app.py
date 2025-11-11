@@ -158,5 +158,6 @@ if st.session_state.cleaning_done and st.session_state.cleaned_df is not None:
             mime="text/csv"
         )
 
-else:
+# Only show info message if no file is uploaded yet
+if uploaded_file is None and not st.session_state.cleaning_done:
     st.info("Please upload a file to begin.")
