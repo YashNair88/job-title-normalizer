@@ -32,6 +32,13 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+# ---- Session State ----
+if "cleaned_df" not in st.session_state:
+    st.session_state.cleaned_df = None
+    st.session_state.major_changes_df = None
+    st.session_state.temp_output = None
+    st.session_state.cleaning_done = False
+
 # ---- Upload ----
 uploaded_file = st.file_uploader(label="", type=["xlsx", "csv"], label_visibility="collapsed")
 
@@ -39,7 +46,6 @@ if uploaded_file is not None:
     try:
         file_ext = os.path.splitext(uploaded_file.name)[1].lower()
 
-        # --- For Excel files ---
         if file_ext == ".xlsx":
             excel_file = pd.ExcelFile(uploaded_file)
             sheet_names = excel_file.sheet_names
@@ -78,35 +84,12 @@ if uploaded_file is not None:
                             return_changes=True
                         )
 
+                        st.session_state.cleaned_df = cleaned_df
+                        st.session_state.major_changes_df = major_changes_df
+                        st.session_state.temp_output = temp_output
+                        st.session_state.cleaning_done = True
                         st.success(f"Cleaning complete for column '{selected_column}'.")
 
-                        st.subheader("Preview")
-                        preview_changes = major_changes_df.copy()
-                        preview_changes.index = range(1, len(preview_changes) + 1)
-                        preview_changes.index.name = ""
-                        st.dataframe(preview_changes)
-
-                        # ---- Download options ----
-                        download_format = st.selectbox("Select download format:", ["Excel (.xlsx)", "CSV (.csv)"])
-
-                        if download_format == "Excel (.xlsx)":
-                            with open(temp_output, "rb") as f:
-                                st.download_button(
-                                    label="Download Cleaned Excel File",
-                                    data=f,
-                                    file_name="Cleaned_Employee_Data.xlsx",
-                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                                )
-                        else:
-                            csv_data = cleaned_df.to_csv(index=False).encode("utf-8")
-                            st.download_button(
-                                label="Download Cleaned CSV File",
-                                data=csv_data,
-                                file_name="Cleaned_Employee_Data.csv",
-                                mime="text/csv"
-                            )
-
-        # --- For CSV files ---
         elif file_ext == ".csv":
             df = pd.read_csv(uploaded_file)
             columns = list(df.columns)
@@ -136,36 +119,44 @@ if uploaded_file is not None:
                         return_changes=True
                     )
 
+                    st.session_state.cleaned_df = cleaned_df
+                    st.session_state.major_changes_df = major_changes_df
+                    st.session_state.temp_output = temp_output
+                    st.session_state.cleaning_done = True
                     st.success(f"Cleaning complete for column '{selected_column}'.")
-
-                    st.subheader("Preview")
-                    st.dataframe(major_changes_df)
-
-                    # ---- Download options ----
-                    download_format = st.selectbox("Select download format:", ["Excel (.xlsx)", "CSV (.csv)"])
-
-                    if download_format == "Excel (.xlsx)":
-                        with open(temp_output, "rb") as f:
-                            st.download_button(
-                                label="Download Cleaned Excel File",
-                                data=f,
-                                file_name="Cleaned_Employee_Data.xlsx",
-                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                            )
-                    else:
-                        csv_data = cleaned_df.to_csv(index=False).encode("utf-8")
-                        st.download_button(
-                            label="Download Cleaned CSV File",
-                            data=csv_data,
-                            file_name="Cleaned_Employee_Data.csv",
-                            mime="text/csv"
-                        )
 
         else:
             st.error("Unsupported file format. Please upload a .xlsx or .csv file.")
 
     except Exception as e:
         st.error(f"Error processing file: {e}")
+
+# ---- After Cleaning (Persistent Download Options) ----
+if st.session_state.cleaning_done and st.session_state.cleaned_df is not None:
+    st.subheader("Preview")
+    preview_changes = st.session_state.major_changes_df.copy()
+    preview_changes.index = range(1, len(preview_changes) + 1)
+    preview_changes.index.name = ""
+    st.dataframe(preview_changes)
+
+    download_format = st.selectbox("Select download format:", ["Excel (.xlsx)", "CSV (.csv)"])
+
+    if download_format == "Excel (.xlsx)":
+        with open(st.session_state.temp_output, "rb") as f:
+            st.download_button(
+                label="Download Cleaned Excel File",
+                data=f,
+                file_name="Cleaned_Employee_Data.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+    else:
+        csv_data = st.session_state.cleaned_df.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            label="Download Cleaned CSV File",
+            data=csv_data,
+            file_name="Cleaned_Employee_Data.csv",
+            mime="text/csv"
+        )
 
 else:
     st.info("Please upload a file to begin.")
