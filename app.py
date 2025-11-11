@@ -23,12 +23,10 @@ header[data-testid="stHeader"]{ background:transparent !important; }
 """, unsafe_allow_html=True)
 
 # ---- Header ----
-# st.markdown("<h1 class='jt-title'>Job Title Normalizer</h1>", unsafe_allow_html=True)
 st.markdown(
     "<div style='text-align:center; font-size:28px; font-weight:700; color:#111; margin:0 0 6px;'>Job Title Normalizer</div>",
     unsafe_allow_html=True
 )
-# st.markdown("<p class='jt-subtitle'>Clean and standardize job titles instantly from your Excel or CSV file.</p>", unsafe_allow_html=True)
 st.markdown(
     "<p style='text-align:center; font-size:16px; color:#333; margin:0 0 18px;'>Clean and standardize job titles instantly from your Excel or CSV file.</p>",
     unsafe_allow_html=True
@@ -52,12 +50,11 @@ if uploaded_file is not None:
                 columns = list(df.columns)
                 selected_column = st.selectbox("Select the column to clean:", options=columns)
 
-                # Show selected column preview
                 if selected_column:
                     st.subheader("Selected Column")
                     preview_df = df[[selected_column]].head().copy()
-                    preview_df.index = range(1, len(preview_df) + 1)  # start index at 1
-                    preview_df.index.name = ""  # remove index header
+                    preview_df.index = range(1, len(preview_df) + 1)
+                    preview_df.index.name = ""
                     st.dataframe(preview_df)
 
                 if st.button("Clean Selected Column"):
@@ -85,16 +82,28 @@ if uploaded_file is not None:
 
                         st.subheader("Preview")
                         preview_changes = major_changes_df.copy()
-                        preview_changes.index = range(1, len(preview_changes) + 1)  # start index at 1
-                        preview_changes.index.name = ""  # remove index header
+                        preview_changes.index = range(1, len(preview_changes) + 1)
+                        preview_changes.index.name = ""
                         st.dataframe(preview_changes)
 
-                        with open(temp_output, "rb") as f:
+                        # ---- Download options ----
+                        download_format = st.selectbox("Select download format:", ["Excel (.xlsx)", "CSV (.csv)"])
+
+                        if download_format == "Excel (.xlsx)":
+                            with open(temp_output, "rb") as f:
+                                st.download_button(
+                                    label="Download Cleaned Excel File",
+                                    data=f,
+                                    file_name="Cleaned_Employee_Data.xlsx",
+                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                )
+                        else:
+                            csv_data = cleaned_df.to_csv(index=False).encode("utf-8")
                             st.download_button(
-                                label="Download Cleaned Excel File",
-                                data=f,
-                                file_name="Cleaned_Employee_Data.xlsx",
-                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                label="Download Cleaned CSV File",
+                                data=csv_data,
+                                file_name="Cleaned_Employee_Data.csv",
+                                mime="text/csv"
                             )
 
         # --- For CSV files ---
@@ -103,7 +112,6 @@ if uploaded_file is not None:
             columns = list(df.columns)
             selected_column = st.selectbox("Select the column to clean:", options=columns)
 
-            # Show selected column preview
             if selected_column:
                 st.subheader("Selected Column")
                 st.dataframe(df[[selected_column]].head())
@@ -133,12 +141,24 @@ if uploaded_file is not None:
                     st.subheader("Preview")
                     st.dataframe(major_changes_df)
 
-                    with open(temp_output, "rb") as f:
+                    # ---- Download options ----
+                    download_format = st.selectbox("Select download format:", ["Excel (.xlsx)", "CSV (.csv)"])
+
+                    if download_format == "Excel (.xlsx)":
+                        with open(temp_output, "rb") as f:
+                            st.download_button(
+                                label="Download Cleaned Excel File",
+                                data=f,
+                                file_name="Cleaned_Employee_Data.xlsx",
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                            )
+                    else:
+                        csv_data = cleaned_df.to_csv(index=False).encode("utf-8")
                         st.download_button(
-                            label="Download Cleaned Excel File",
-                            data=f,
-                            file_name="Cleaned_Employee_Data.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                            label="Download Cleaned CSV File",
+                            data=csv_data,
+                            file_name="Cleaned_Employee_Data.csv",
+                            mime="text/csv"
                         )
 
         else:
