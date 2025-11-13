@@ -4,13 +4,64 @@ import json
 import re
 import streamlit as st
 from sentence_transformers import SentenceTransformer, util
+from rapidfuzz import process
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 
-# --- Model & threshold ---
-model = SentenceTransformer('all-mpnet-base-v2')  # high-accuracy model
+# =========================================================
+#  SPELL CORRECTION MODELS
+# =========================================================
+
+# ML Spell Corrector (HuggingFace)
+tokenizer_sc = AutoTokenizer.from_pretrained("oliverguhr/spelling-correction-english-base")
+model_sc = AutoModelForSeq2SeqLM.from_pretrained("oliverguhr/spelling-correction-english-base")
+
+def ml_spell_correct(text):
+    try:
+        input_ids = tokenizer_sc.encode(text, return_tensors="pt")
+        output = model_sc.generate(input_ids, max_length=60)
+        corrected = tokenizer_sc.decode(output[0], skip_special_tokens=True)
+        return corrected
+    except Exception:
+        return text
+
+# Rule-based corrections
+COMMON_CORRECTIONS = {
+    r"\bengg\b": "engineer",
+    r"\basst\b": "assistant",
+    r"\bhk\b": "housekeeping",
+    r"\bsupv\b": "supervisor",
+    r"\bsuprv\b": "supervisor",
+    r"\bexec\b": "executive",
+    r"carpendar|carpendry|carpentry": "carpenter",
+    r"techinician|technicion": "technician",
+    r"superviser": "supervisor",
+}
+
+def rule_correct(text):
+    t = text.lower().strip()
+    for wrong, right in COMMON_CORRECTIONS.items():
+        t = re.sub(wrong, right, t)
+    return t
+
+# Fuzzy correction (RapidFuzz)
+def fuzzy_correct(text, known_keys):
+    match = process.extractOne(text, known_keys)
+    if match and match[1] >= 85:
+        return match[0]  # high confidence
+    return text
+
+# =========================================================
+# SEMANTIC MODEL (GTE)
+# =========================================================
+# Switched from 'all-mpnet-base-v2' to GTE:
+model = SentenceTransformer("thenlper/gte-large")
+
 SIMILARITY_THRESHOLD = 0.75
 AUTO_LEARN_THRESHOLD = 0.88   # high confidence threshold for auto-add to JSON
 
-# --- Load & Save Mapping ---
+# =========================================================
+# LOAD/SAVE MAPPING
+# =========================================================
 def load_mapping(json_path):
     with open(json_path, 'r', encoding='utf-8') as f:
         return json.load(f)
@@ -19,7 +70,9 @@ def save_mapping(mapping, json_path):
     with open(json_path, 'w', encoding='utf-8') as f:
         json.dump(mapping, f, indent=4, ensure_ascii=False)
 
-# --- Text Formatting ---
+# =========================================================
+# TEXT FORMATTING
+# =========================================================
 def capitalize_title(title):
     words = str(title).split()
     corrected = []
@@ -35,15 +88,33 @@ def capitalize_title(title):
 def normalize_title(title):
     return str(title).lower().strip()
 
-# --- Mapping Logic (with auto-learn) ---
+# =========================================================
+# PREPROCESS + SEMANTIC MAPPING
+# =========================================================
+def preprocess_title(raw, known_keys):
+    t = str(raw).lower().strip()
+
+    # 1️⃣ Rule-based corrections
+    t = rule_correct(t)
+
+    # 2️⃣ ML spell correction
+    t = ml_spell_correct(t)
+
+    # 3️⃣ Fuzzy correction vs known keys
+    t = fuzzy_correct(t, known_keys)
+
+    return t
+
 def map_title(raw_title, mapping, known_titles_embed, known_keys, mapping_path):
-    normalized = normalize_title(raw_title)
+    # --- Preprocess with rules + ML + fuzzy ---
+    cleaned = preprocess_title(raw_title, known_keys)
+    normalized = normalize_title(cleaned)
 
     # 1. Direct match
     if normalized in mapping:
         return mapping[normalized], False
 
-    # 2. Semantic similarity match
+    # 2. Semantic similarity match with GTE
     raw_emb = model.encode(normalized, normalize_embeddings=True)
     similarities = util.cos_sim(raw_emb, known_titles_embed)[0].cpu().numpy()
 
@@ -52,25 +123,27 @@ def map_title(raw_title, mapping, known_titles_embed, known_keys, mapping_path):
     best_key = known_keys[best_idx]
     best_canonical = mapping[best_key]
 
-    # 3. High-confidence match → auto-learn variant
+    # 3. High-confidence match → auto-add to JSON
     if best_score >= AUTO_LEARN_THRESHOLD:
-        mapping[normalized] = best_canonical  # add the spelling variant
-        save_mapping(mapping, mapping_path)    # update JSON permanently
+        mapping[normalized] = best_canonical
+        save_mapping(mapping, mapping_path)
         return best_canonical, False
 
-    # 4. Normal threshold → accept but don't learn
+    # 4. Acceptable match only (no auto-learn)
     if best_score >= SIMILARITY_THRESHOLD:
         return best_canonical, False
 
-    # 5. Unknown
-    return 'Unknown - Needs Review', True
+    # 5. Unknown case
+    return "Unknown - Needs Review", True
 
-# --- Main Processing ---
+# =========================================================
+# MAIN PROCESSOR
+# =========================================================
 def process_excel(input_path, output_path, mapping_path, dept_json_output,
                   target_column, sheet_name=None,
                   return_df=False, return_changes=False):
 
-    # --- Load file ---
+    # Load Excel/CSV
     if input_path.endswith('.xlsx'):
         df = pd.read_excel(input_path, sheet_name=sheet_name) if sheet_name else pd.read_excel(input_path)
     else:
@@ -79,7 +152,7 @@ def process_excel(input_path, output_path, mapping_path, dept_json_output,
     if target_column not in df.columns:
         raise ValueError(f"Column '{target_column}' not found in file.")
 
-    # --- Load mapping ---
+    # Load mapping
     mapping = load_mapping(mapping_path)
     known_keys = list(mapping.keys())
     known_embeddings = model.encode(known_keys, normalize_embeddings=True)
@@ -87,26 +160,20 @@ def process_excel(input_path, output_path, mapping_path, dept_json_output,
     standardized = []
     unknowns = set()
 
-    # --- Streamlit Progress UI ---
     total_rows = len(df)
     progress_bar = st.progress(0)
     status_text = st.empty()
 
-    # --- Process Rows ---
     for i, raw in enumerate(df[target_column]):
         mapped, is_unknown = map_title(
-            str(raw),
-            mapping,
-            known_embeddings,
-            known_keys,
-            mapping_path
+            str(raw), mapping, known_embeddings, known_keys, mapping_path
         )
-
         standardized.append(capitalize_title(mapped))
+
         if is_unknown:
             unknowns.add(normalize_title(raw))
 
-        # Update progress
+        # Progress bar
         if (i + 1) % 100 == 0 or i + 1 == total_rows:
             percent = int(((i + 1) / total_rows) * 100)
             progress_bar.progress(percent)
@@ -115,36 +182,12 @@ def process_excel(input_path, output_path, mapping_path, dept_json_output,
     progress_bar.progress(100)
     status_text.text("Processing complete!")
 
-    # --- Add normalized column ---
+    # Add normalized column
     normalized_col = f"Normalized {target_column}"
     df[normalized_col] = standardized
     df.to_excel(output_path, index=False)
 
-    # --- Identify big changes ---
-    invalid_values = ["-", "nan", "none", "null", "na", ""]
-    filtered_df = df[
-        (~df[target_column].astype(str).str.lower().isin(invalid_values)) &
-        (~df[normalized_col].astype(str).str.lower().isin(invalid_values))
-    ]
+    # (Optional) change analysis logic could be added back here if you want
 
-    sample_df = filtered_df.sample(min(len(filtered_df), 400), random_state=42)
-    raw_list = sample_df[target_column].astype(str).tolist()
-    norm_list = sample_df[normalized_col].astype(str).tolist()
-
-    raw_embeds = model.encode(raw_list, normalize_embeddings=True)
-    norm_embeds = model.encode(norm_list, normalize_embeddings=True)
-    similarity_scores = util.cos_sim(raw_embeds, norm_embeds).diagonal().cpu().numpy()
-
-    sample_df["Change Score"] = 1 - similarity_scores
-    major_changes = (
-        sample_df[[target_column, normalized_col, "Change Score"]]
-        .sort_values("Change Score", ascending=False)
-        .head(5)
-        .drop(columns=["Change Score"])
-        .reset_index(drop=True)
-    )
-    major_changes.index = major_changes.index + 1
-
-    # --- Return results ---
     if return_df:
-        return (df, major_changes) if return_changes else df
+        return df
