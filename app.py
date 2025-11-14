@@ -40,10 +40,6 @@ header[data-testid="stHeader"]{ background:transparent !important; }
     padding:.7rem 1.3rem !important; font-weight:600 !important;
 }
 .stAlert { border-radius:10px !important; }
-@media (max-width: 600px){
-    .block-container{ padding-top:1.2rem; }
-    .stFileUploader{ padding:.85rem !important; }
-}
 </style>
 """, unsafe_allow_html=True)
 
@@ -55,7 +51,7 @@ st.markdown("""
     Job Title Normalizer
 </div>
 <p style='text-align:center; font-size:16px; color:#333; margin:0 0 18px;'>
-    Clean and standardize job titles instantly from your Excel or CSV file.
+    Clean and standardize job-related columns (multiple columns supported)
 </p>
 """, unsafe_allow_html=True)
 
@@ -66,7 +62,7 @@ st.markdown("""
 if "cleaning_done" not in st.session_state:
     st.session_state.cleaning_done = False
     st.session_state.cleaned_df = None
-    st.session_state.major_changes_df = None
+    st.session_state.changes_df = None
     st.session_state.temp_output = None
 
 
@@ -92,20 +88,21 @@ if uploaded_file is not None:
             if selected_sheet:
                 df = pd.read_excel(excel_file, sheet_name=selected_sheet)
                 columns = df.columns.tolist()
-                selected_column = st.selectbox("Select the column to clean:", columns)
 
-                if selected_column:
-                    st.subheader("Selected Column")
-                    preview_df = df[[selected_column]].head()
-                    preview_df.index = range(1, len(preview_df) + 1)
-                    preview_df.index.name = ""
-                    st.dataframe(preview_df)
+                # MULTI-COLUMN SUPPORT
+                selected_columns = st.multiselect(
+                    "Select column(s) to clean:", 
+                    columns
+                )
 
-                if st.button("Clean Selected Column"):
+                if selected_columns:
+                    st.subheader("Preview of Selected Columns")
+                    st.dataframe(df[selected_columns].head())
+
+                if st.button("Clean Selected Column(s)") and selected_columns:
 
                     with st.spinner("Processing your file... Please wait ⏳"):
 
-                        # Save file temporarily
                         with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
                             uploaded_file.seek(0)
                             tmp.write(uploaded_file.getbuffer())
@@ -114,24 +111,23 @@ if uploaded_file is not None:
                         temp_output = tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx').name
                         dept_json_output = tempfile.NamedTemporaryFile(delete=False, suffix='.json').name
 
-                        cleaned_df, major_changes_df = process_excel(
+                        cleaned_df, changes_df = process_excel(
                             input_path=temp_input,
                             output_path=temp_output,
                             mapping_path="final_canonical_mapping.json",
                             dept_json_output=dept_json_output,
-                            target_column=selected_column,
+                            target_columns=selected_columns,
                             sheet_name=selected_sheet,
                             return_df=True,
                             return_changes=True
                         )
 
-                        # Save to session state
                         st.session_state.cleaned_df = cleaned_df
-                        st.session_state.major_changes_df = major_changes_df
+                        st.session_state.changes_df = changes_df
                         st.session_state.temp_output = temp_output
                         st.session_state.cleaning_done = True
 
-                        st.success(f"Cleaning complete for column '{selected_column}'.")
+                        st.success(f"Cleaning complete: {', '.join(selected_columns)}")
                         scroll_to_top()
 
 
@@ -142,13 +138,14 @@ if uploaded_file is not None:
 
             df = pd.read_csv(uploaded_file)
             columns = df.columns.tolist()
-            selected_column = st.selectbox("Select the column to clean:", columns)
 
-            if selected_column:
-                st.subheader("Selected Column")
-                st.dataframe(df[[selected_column]].head())
+            selected_columns = st.multiselect("Select column(s) to clean:", columns)
 
-            if st.button("Clean Selected Column"):
+            if selected_columns:
+                st.subheader("Preview")
+                st.dataframe(df[selected_columns].head())
+
+            if st.button("Clean Selected Column(s)") and selected_columns:
 
                 with st.spinner("Processing your file... Please wait ⏳"):
 
@@ -159,23 +156,23 @@ if uploaded_file is not None:
                     temp_output = tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx').name
                     dept_json_output = tempfile.NamedTemporaryFile(delete=False, suffix='.json').name
 
-                    cleaned_df, major_changes_df = process_excel(
+                    cleaned_df, changes_df = process_excel(
                         input_path=temp_input,
                         output_path=temp_output,
                         mapping_path="final_canonical_mapping.json",
                         dept_json_output=dept_json_output,
-                        target_column=selected_column,
+                        target_columns=selected_columns,
                         sheet_name=None,
                         return_df=True,
                         return_changes=True
                     )
 
                     st.session_state.cleaned_df = cleaned_df
-                    st.session_state.major_changes_df = major_changes_df
+                    st.session_state.changes_df = changes_df
                     st.session_state.temp_output = temp_output
                     st.session_state.cleaning_done = True
 
-                    st.success(f"Cleaning complete for column '{selected_column}'.")
+                    st.success("Cleaning complete!")
                     scroll_to_top()
 
         else:
@@ -192,11 +189,8 @@ if st.session_state.cleaning_done and st.session_state.cleaned_df is not None:
 
     scroll_to_top()
 
-    st.subheader("Preview")
-    prev = st.session_state.major_changes_df.copy()
-    prev.index = range(1, len(prev) + 1)
-    prev.index.name = ""
-    st.dataframe(prev)
+    st.subheader("Changes Preview")
+    st.dataframe(st.session_state.changes_df)
 
     download_format = st.selectbox("Select download format:", ["Excel (.xlsx)", "CSV (.csv)"])
 
@@ -205,22 +199,21 @@ if st.session_state.cleaning_done and st.session_state.cleaned_df is not None:
             st.download_button(
                 label="Download Cleaned Excel File",
                 data=f,
-                file_name="Cleaned_Employee_Data.xlsx",
+                file_name="Cleaned_Data.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
-
     else:
         csv_data = st.session_state.cleaned_df.to_csv(index=False).encode("utf-8")
         st.download_button(
             label="Download Cleaned CSV File",
             data=csv_data,
-            file_name="Cleaned_Employee_Data.csv",
+            file_name="Cleaned_Data.csv",
             mime="text/csv"
         )
 
 
 # -------------------------------------------------
-# INITIAL HINT MESSAGE
+# INITIAL MESSAGE
 # -------------------------------------------------
 if uploaded_file is None and not st.session_state.cleaning_done:
     st.info("Please upload a file to begin.")
