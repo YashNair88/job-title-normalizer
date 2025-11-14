@@ -7,7 +7,7 @@ from sentence_transformers import SentenceTransformer, util
 from rapidfuzz import process
 
 # =========================================================
-# RULE-BASED CORRECTIONS (fast, no ML spell model)
+# RULE-BASED CORRECTIONS
 # =========================================================
 
 COMMON_CORRECTIONS = {
@@ -23,27 +23,25 @@ COMMON_CORRECTIONS = {
 }
 
 def rule_correct(text):
-    t = text.lower().strip()
+    t = text.lower().trim() if hasattr(text, "trim") else text.lower().strip()
     for wrong, right in COMMON_CORRECTIONS.items():
         t = re.sub(wrong, right, t)
     return t
 
-# =========================================================
-# HELPER: CHECK MISSING / PLACEHOLDER VALUES
-# =========================================================
 
+# =========================================================
+# MISSING VALUE CHECK
+# =========================================================
 def is_missing(raw):
     if pd.isna(raw):
         return True
     s = str(raw).strip().lower()
-    if s in ("", "-", "--", "—", "na", "n/a", "null", "none", "nil"):
-        return True
-    return False
+    return s in ("", "-", "--", "—", "na", "n/a", "null", "none", "nil")
+
 
 # =========================================================
-# FUZZY MATCHING
+# FUZZY CORRECTION
 # =========================================================
-
 def fuzzy_correct(text, known_keys):
     if not known_keys:
         return text
@@ -52,20 +50,19 @@ def fuzzy_correct(text, known_keys):
         return match[0]
     return text
 
-# =========================================================
-# SEMANTIC MODEL — MiniLM (Streamlit Cloud safe)
-# =========================================================
 
-# ❗ Replaced GTE-Large with MiniLM (22MB, safe for Streamlit)
+# =========================================================
+# SEMANTIC MODEL (MINILM)
+# =========================================================
 model = SentenceTransformer("all-MiniLM-L6-v2")
 
 SIMILARITY_THRESHOLD = 0.75
 AUTO_LEARN_THRESHOLD = 0.88
 
-# =========================================================
-# LOAD / SAVE MAPPING
-# =========================================================
 
+# =========================================================
+# LOAD/SAVE MAPPING
+# =========================================================
 def load_mapping(path):
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
@@ -74,49 +71,47 @@ def save_mapping(mapping, path):
     with open(path, "w", encoding="utf-8") as f:
         json.dump(mapping, f, indent=4, ensure_ascii=False)
 
-# =========================================================
-# STANDARDIZATION HELPERS
-# =========================================================
 
+# =========================================================
+# NORMALIZATION HELPER
+# =========================================================
 def normalize_title(t):
     return str(t).lower().strip()
 
 def capitalize_title(title):
     words = str(title).split()
-    formatted = []
+    out = []
     for w in words:
         if w.isupper():
-            formatted.append(w)
+            out.append(w)
         else:
             parts = re.split(r"(-)", w)
             parts = [p.capitalize() if p != "-" else p for p in parts]
-            formatted.append("".join(parts))
-    return " ".join(formatted)
+            out.append("".join(parts))
+    return " ".join(out)
+
 
 # =========================================================
-# PREPROCESSING PIPELINE
+# PREPROCESS
 # =========================================================
-
 def preprocess_title(raw, known_keys):
     t = str(raw).lower().strip()
     t = rule_correct(t)
     t = fuzzy_correct(t, known_keys)
     return t
 
-# =========================================================
-# SEMANTIC MATCHING + AUTO-LEARNING
-# =========================================================
 
+# =========================================================
+# MAP TITLE
+# =========================================================
 def map_title(raw, mapping, known_embeddings, known_keys, mapping_path):
 
     cleaned = preprocess_title(raw, known_keys)
     normalized = normalize_title(cleaned)
 
-    # Direct match
     if normalized in mapping:
         return mapping[normalized], False
 
-    # Semantic similarity
     raw_emb = model.encode(normalized, normalize_embeddings=True)
     sims = util.cos_sim(raw_emb, known_embeddings)[0].cpu().numpy()
 
@@ -125,77 +120,77 @@ def map_title(raw, mapping, known_embeddings, known_keys, mapping_path):
     best_key = known_keys[best_idx]
     best_canonical = mapping[best_key]
 
-    # High-confidence auto-learn
     if best_score >= AUTO_LEARN_THRESHOLD:
         mapping[normalized] = best_canonical
         save_mapping(mapping, mapping_path)
         return best_canonical, False
 
-    # Acceptable semantic match
     if best_score >= SIMILARITY_THRESHOLD:
         return best_canonical, False
 
-    # Unknown
     return "Unknown - Needs Review", True
 
+
 # =========================================================
-# MAIN PROCESS FUNCTION USED BY STREAMLIT APP
+# MULTI-COLUMN PROCESSOR
 # =========================================================
 
 def process_excel(input_path, output_path, mapping_path, dept_json_output,
-                  target_column, sheet_name=None,
+                  target_columns, sheet_name=None,
                   return_df=False, return_changes=False):
 
-    # Load Excel/CSV
+    # LOAD DATA
     if input_path.endswith(".xlsx"):
         df = pd.read_excel(input_path, sheet_name=sheet_name) if sheet_name else pd.read_excel(input_path)
     else:
         df = pd.read_csv(input_path)
 
-    if target_column not in df.columns:
-        raise ValueError(f"Column '{target_column}' not found")
-
-    # Load canonical mapping
+    # LOAD MAPPING
     mapping = load_mapping(mapping_path)
     known_keys = list(mapping.keys())
     known_embeddings = model.encode(known_keys, normalize_embeddings=True)
 
-    standardized = []
-    total = len(df)
+    change_logs = []
 
-    progress = st.progress(0)
-    text = st.empty()
+    # PROCESS EACH SELECTED COLUMN
+    for col in target_columns:
 
-    for i, raw in enumerate(df[target_column]):
+        standardized = []
+        total = len(df)
 
-        # Handle null / placeholder values
-        if is_missing(raw):
-            standardized.append("")
-        else:
-            mapped, is_unknown = map_title(
-                str(raw), mapping, known_embeddings, known_keys, mapping_path
-            )
-            standardized.append(capitalize_title(mapped))
+        progress = st.progress(0)
+        text = st.empty()
 
-        if (i + 1) % 50 == 0 or i + 1 == total:
-            percent = int(((i + 1) / total) * 100)
-            progress.progress(percent)
-            text.text(f"Processing {i+1}/{total}...")
+        for i, raw in enumerate(df[col]):
+            if is_missing(raw):
+                standardized.append("")
+            else:
+                mapped, is_unknown = map_title(
+                    str(raw), mapping, known_embeddings, known_keys, mapping_path
+                )
+                standardized.append(capitalize_title(mapped))
 
-    progress.progress(100)
-    text.text("Processing complete!")
+            if (i + 1) % 50 == 0 or i + 1 == total:
+                percent = int(((i + 1) / total) * 100)
+                progress.progress(percent)
+                text.text(f"Cleaning '{col}' — {i+1}/{total}")
 
-    # Add normalized column
-    new_col = f"Normalized {target_column}"
-    df[new_col] = standardized
+        new_col = f"Normalized {col}"
+        df[new_col] = standardized
 
+        change_logs.append(
+            pd.DataFrame({
+                "Column": col,
+                "Original": df[col],
+                "Normalized": df[new_col]
+            })
+        )
+
+    # MERGE ALL CHANGES
+    changes_df = pd.concat(change_logs, ignore_index=True)
+
+    # SAVE CLEANED FILE
     df.to_excel(output_path, index=False)
-
-    # Track changes (for preview)
-    changes_df = pd.DataFrame({
-        "Original": df[target_column],
-        "Normalized": df[new_col]
-    })
 
     if return_df and return_changes:
         return df, changes_df
