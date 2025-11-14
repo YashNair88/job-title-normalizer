@@ -31,6 +31,7 @@ def rule_correct(text):
 # =========================================================
 # HELPER: CHECK MISSING / PLACEHOLDER VALUES
 # =========================================================
+
 def is_missing(raw):
     if pd.isna(raw):
         return True
@@ -39,31 +40,32 @@ def is_missing(raw):
         return True
     return False
 
-
 # =========================================================
 # FUZZY MATCHING
 # =========================================================
+
 def fuzzy_correct(text, known_keys):
     if not known_keys:
         return text
     match = process.extractOne(text, known_keys)
     if match and match[1] >= 85:
-        return match[0]  # high confidence fuzzy match
+        return match[0]
     return text
 
+# =========================================================
+# SEMANTIC MODEL — MiniLM (Streamlit Cloud safe)
+# =========================================================
 
-# =========================================================
-# SEMANTIC MODEL (GTE-Large)
-# =========================================================
-model = SentenceTransformer("thenlper/gte-large")
+# ❗ Replaced GTE-Large with MiniLM (22MB, safe for Streamlit)
+model = SentenceTransformer("all-MiniLM-L6-v2")
 
 SIMILARITY_THRESHOLD = 0.75
 AUTO_LEARN_THRESHOLD = 0.88
 
-
 # =========================================================
 # LOAD / SAVE MAPPING
 # =========================================================
+
 def load_mapping(path):
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
@@ -72,10 +74,10 @@ def save_mapping(mapping, path):
     with open(path, "w", encoding="utf-8") as f:
         json.dump(mapping, f, indent=4, ensure_ascii=False)
 
-
 # =========================================================
 # STANDARDIZATION HELPERS
 # =========================================================
+
 def normalize_title(t):
     return str(t).lower().strip()
 
@@ -91,30 +93,30 @@ def capitalize_title(title):
             formatted.append("".join(parts))
     return " ".join(formatted)
 
-
 # =========================================================
 # PREPROCESSING PIPELINE
 # =========================================================
+
 def preprocess_title(raw, known_keys):
     t = str(raw).lower().strip()
     t = rule_correct(t)
     t = fuzzy_correct(t, known_keys)
     return t
 
-
 # =========================================================
 # SEMANTIC MATCHING + AUTO-LEARNING
 # =========================================================
+
 def map_title(raw, mapping, known_embeddings, known_keys, mapping_path):
 
     cleaned = preprocess_title(raw, known_keys)
     normalized = normalize_title(cleaned)
 
-    # Direct mapping
+    # Direct match
     if normalized in mapping:
         return mapping[normalized], False
 
-    # Semantic search
+    # Semantic similarity
     raw_emb = model.encode(normalized, normalize_embeddings=True)
     sims = util.cos_sim(raw_emb, known_embeddings)[0].cpu().numpy()
 
@@ -123,28 +125,28 @@ def map_title(raw, mapping, known_embeddings, known_keys, mapping_path):
     best_key = known_keys[best_idx]
     best_canonical = mapping[best_key]
 
-    # High-confidence → auto-learn
+    # High-confidence auto-learn
     if best_score >= AUTO_LEARN_THRESHOLD:
         mapping[normalized] = best_canonical
         save_mapping(mapping, mapping_path)
         return best_canonical, False
 
-    # Acceptable match
+    # Acceptable semantic match
     if best_score >= SIMILARITY_THRESHOLD:
         return best_canonical, False
 
     # Unknown
     return "Unknown - Needs Review", True
 
+# =========================================================
+# MAIN PROCESS FUNCTION USED BY STREAMLIT APP
+# =========================================================
 
-# =========================================================
-# MAIN PROCESS FUNCTION (Called by Streamlit app)
-# =========================================================
 def process_excel(input_path, output_path, mapping_path, dept_json_output,
                   target_column, sheet_name=None,
                   return_df=False, return_changes=False):
 
-    # Read file
+    # Load Excel/CSV
     if input_path.endswith(".xlsx"):
         df = pd.read_excel(input_path, sheet_name=sheet_name) if sheet_name else pd.read_excel(input_path)
     else:
@@ -153,7 +155,7 @@ def process_excel(input_path, output_path, mapping_path, dept_json_output,
     if target_column not in df.columns:
         raise ValueError(f"Column '{target_column}' not found")
 
-    # Load mapping
+    # Load canonical mapping
     mapping = load_mapping(mapping_path)
     known_keys = list(mapping.keys())
     known_embeddings = model.encode(known_keys, normalize_embeddings=True)
@@ -161,15 +163,14 @@ def process_excel(input_path, output_path, mapping_path, dept_json_output,
     standardized = []
     total = len(df)
 
-    # UI progress bar
     progress = st.progress(0)
     text = st.empty()
 
     for i, raw in enumerate(df[target_column]):
 
-        # 🔴 NEW: Handle null / "-" / placeholders → keep blank
+        # Handle null / placeholder values
         if is_missing(raw):
-            standardized.append("")   # or use None if you prefer
+            standardized.append("")
         else:
             mapped, is_unknown = map_title(
                 str(raw), mapping, known_embeddings, known_keys, mapping_path
@@ -188,16 +189,14 @@ def process_excel(input_path, output_path, mapping_path, dept_json_output,
     new_col = f"Normalized {target_column}"
     df[new_col] = standardized
 
-    # Save cleaned file
     df.to_excel(output_path, index=False)
 
-    # Track changes for preview
+    # Track changes (for preview)
     changes_df = pd.DataFrame({
         "Original": df[target_column],
         "Normalized": df[new_col]
     })
 
-    # Always return 2 values when asked
     if return_df and return_changes:
         return df, changes_df
 
