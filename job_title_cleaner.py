@@ -7,7 +7,7 @@ from sentence_transformers import SentenceTransformer, util
 from rapidfuzz import process
 
 # =========================================================
-# RULE-BASED CORRECTIONS
+# RULE-BASED CORRECTIONS (fast, no ML spell model)
 # =========================================================
 
 COMMON_CORRECTIONS = {
@@ -28,19 +28,32 @@ def rule_correct(text):
         t = re.sub(wrong, right, t)
     return t
 
+# =========================================================
+# HELPER: CHECK MISSING / PLACEHOLDER VALUES
+# =========================================================
+def is_missing(raw):
+    if pd.isna(raw):
+        return True
+    s = str(raw).strip().lower()
+    if s in ("", "-", "--", "—", "na", "n/a", "null", "none", "nil"):
+        return True
+    return False
+
 
 # =========================================================
 # FUZZY MATCHING
 # =========================================================
 def fuzzy_correct(text, known_keys):
+    if not known_keys:
+        return text
     match = process.extractOne(text, known_keys)
     if match and match[1] >= 85:
-        return match[0]
+        return match[0]  # high confidence fuzzy match
     return text
 
 
 # =========================================================
-# SEMANTIC MODEL
+# SEMANTIC MODEL (GTE-Large)
 # =========================================================
 model = SentenceTransformer("thenlper/gte-large")
 
@@ -61,22 +74,22 @@ def save_mapping(mapping, path):
 
 
 # =========================================================
-# CLEANING HELPERS
+# STANDARDIZATION HELPERS
 # =========================================================
 def normalize_title(t):
     return str(t).lower().strip()
 
 def capitalize_title(title):
     words = str(title).split()
-    fixed = []
+    formatted = []
     for w in words:
         if w.isupper():
-            fixed.append(w)
+            formatted.append(w)
         else:
             parts = re.split(r"(-)", w)
             parts = [p.capitalize() if p != "-" else p for p in parts]
-            fixed.append("".join(parts))
-    return " ".join(fixed)
+            formatted.append("".join(parts))
+    return " ".join(formatted)
 
 
 # =========================================================
@@ -90,7 +103,7 @@ def preprocess_title(raw, known_keys):
 
 
 # =========================================================
-# SEMANTIC MATCHING
+# SEMANTIC MATCHING + AUTO-LEARNING
 # =========================================================
 def map_title(raw, mapping, known_embeddings, known_keys, mapping_path):
 
@@ -101,7 +114,7 @@ def map_title(raw, mapping, known_embeddings, known_keys, mapping_path):
     if normalized in mapping:
         return mapping[normalized], False
 
-    # Semantic matching
+    # Semantic search
     raw_emb = model.encode(normalized, normalize_embeddings=True)
     sims = util.cos_sim(raw_emb, known_embeddings)[0].cpu().numpy()
 
@@ -110,25 +123,28 @@ def map_title(raw, mapping, known_embeddings, known_keys, mapping_path):
     best_key = known_keys[best_idx]
     best_canonical = mapping[best_key]
 
+    # High-confidence → auto-learn
     if best_score >= AUTO_LEARN_THRESHOLD:
         mapping[normalized] = best_canonical
         save_mapping(mapping, mapping_path)
         return best_canonical, False
 
+    # Acceptable match
     if best_score >= SIMILARITY_THRESHOLD:
         return best_canonical, False
 
+    # Unknown
     return "Unknown - Needs Review", True
 
 
 # =========================================================
-# MAIN PROCESSOR FOR STREAMLIT
+# MAIN PROCESS FUNCTION (Called by Streamlit app)
 # =========================================================
 def process_excel(input_path, output_path, mapping_path, dept_json_output,
                   target_column, sheet_name=None,
                   return_df=False, return_changes=False):
 
-    # Load file
+    # Read file
     if input_path.endswith(".xlsx"):
         df = pd.read_excel(input_path, sheet_name=sheet_name) if sheet_name else pd.read_excel(input_path)
     else:
@@ -137,6 +153,7 @@ def process_excel(input_path, output_path, mapping_path, dept_json_output,
     if target_column not in df.columns:
         raise ValueError(f"Column '{target_column}' not found")
 
+    # Load mapping
     mapping = load_mapping(mapping_path)
     known_keys = list(mapping.keys())
     known_embeddings = model.encode(known_keys, normalize_embeddings=True)
@@ -144,51 +161,46 @@ def process_excel(input_path, output_path, mapping_path, dept_json_output,
     standardized = []
     total = len(df)
 
+    # UI progress bar
     progress = st.progress(0)
     text = st.empty()
 
     for i, raw in enumerate(df[target_column]):
 
-        # -----------------------------------------
-        # 1️⃣ HANDLE NULL / EMPTY / PLACEHOLDER VALUES
-        # -----------------------------------------
-        if raw is None or str(raw).strip() in ["", "-", "_", "nan", "none", "NULL", "N/A", "na", "NaN"]:
-            standardized.append("")   # leave empty
-            continue
+        # 🔴 NEW: Handle null / "-" / placeholders → keep blank
+        if is_missing(raw):
+            standardized.append("")   # or use None if you prefer
+        else:
+            mapped, is_unknown = map_title(
+                str(raw), mapping, known_embeddings, known_keys, mapping_path
+            )
+            standardized.append(capitalize_title(mapped))
 
-        # -----------------------------------------
-        # 2️⃣ PROCESS VALID TITLES
-        # -----------------------------------------
-        mapped, is_unknown = map_title(
-            str(raw), mapping, known_embeddings, known_keys, mapping_path
-        )
-
-        standardized.append(capitalize_title(mapped))
-
-        # UI progress
         if (i + 1) % 50 == 0 or i + 1 == total:
-            pct = int(((i + 1) / total) * 100)
-            progress.progress(pct)
+            percent = int(((i + 1) / total) * 100)
+            progress.progress(percent)
             text.text(f"Processing {i+1}/{total}...")
 
     progress.progress(100)
     text.text("Processing complete!")
 
-    # Create output column
+    # Add normalized column
     new_col = f"Normalized {target_column}"
     df[new_col] = standardized
 
+    # Save cleaned file
     df.to_excel(output_path, index=False)
 
-    # Changes DataFrame
+    # Track changes for preview
     changes_df = pd.DataFrame({
         "Original": df[target_column],
         "Normalized": df[new_col]
     })
 
-    # Correct return behavior for Streamlit
+    # Always return 2 values when asked
     if return_df and return_changes:
         return df, changes_df
+
     if return_df:
         return df
 
