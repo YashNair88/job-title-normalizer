@@ -4,3 +4,4 @@ numpy
 openpyxl
 sentence-transformers
 scikit-learn
+rapidfuzz
