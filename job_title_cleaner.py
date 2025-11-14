@@ -5,26 +5,11 @@ import re
 import streamlit as st
 from sentence_transformers import SentenceTransformer, util
 from rapidfuzz import process
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 
 # =========================================================
-#  SPELL CORRECTION MODELS
+# FAST RULE-BASED CORRECTIONS (No ML spell corrector)
 # =========================================================
 
-# ML Spell Corrector (HuggingFace)
-tokenizer_sc = AutoTokenizer.from_pretrained("oliverguhr/spelling-correction-english-base")
-model_sc = AutoModelForSeq2SeqLM.from_pretrained("oliverguhr/spelling-correction-english-base")
-
-def ml_spell_correct(text):
-    try:
-        input_ids = tokenizer_sc.encode(text, return_tensors="pt")
-        output = model_sc.generate(input_ids, max_length=60)
-        corrected = tokenizer_sc.decode(output[0], skip_special_tokens=True)
-        return corrected
-    except Exception:
-        return text
-
-# Rule-based corrections
 COMMON_CORRECTIONS = {
     r"\bengg\b": "engineer",
     r"\basst\b": "assistant",
@@ -43,21 +28,25 @@ def rule_correct(text):
         t = re.sub(wrong, right, t)
     return t
 
-# Fuzzy correction (RapidFuzz)
+
+# =========================================================
+# FUZZY MATCHING
+# =========================================================
 def fuzzy_correct(text, known_keys):
     match = process.extractOne(text, known_keys)
     if match and match[1] >= 85:
-        return match[0]  # high confidence
+        return match[0]
     return text
 
+
 # =========================================================
-# SEMANTIC MODEL (GTE)
+# SEMANTIC MODEL (GTE for speed)
 # =========================================================
-# Switched from 'all-mpnet-base-v2' to GTE:
 model = SentenceTransformer("thenlper/gte-large")
 
 SIMILARITY_THRESHOLD = 0.75
-AUTO_LEARN_THRESHOLD = 0.88   # high confidence threshold for auto-add to JSON
+AUTO_LEARN_THRESHOLD = 0.88
+
 
 # =========================================================
 # LOAD/SAVE MAPPING
@@ -70,8 +59,9 @@ def save_mapping(mapping, json_path):
     with open(json_path, 'w', encoding='utf-8') as f:
         json.dump(mapping, f, indent=4, ensure_ascii=False)
 
+
 # =========================================================
-# TEXT FORMATTING
+# TEXT FORMATTER
 # =========================================================
 def capitalize_title(title):
     words = str(title).split()
@@ -85,72 +75,72 @@ def capitalize_title(title):
             corrected.append(''.join(corrected_parts))
     return ' '.join(corrected)
 
-def normalize_title(title):
-    return str(title).lower().strip()
+
+def normalize_title(t):
+    return str(t).lower().strip()
+
 
 # =========================================================
-# PREPROCESS + SEMANTIC MAPPING
+# PREPROCESS INPUT TEXT
 # =========================================================
 def preprocess_title(raw, known_keys):
     t = str(raw).lower().strip()
 
-    # 1️⃣ Rule-based corrections
+    # 1. Rule-based
     t = rule_correct(t)
 
-    # 2️⃣ ML spell correction
-    t = ml_spell_correct(t)
-
-    # 3️⃣ Fuzzy correction vs known keys
+    # 2. Fuzzy
     t = fuzzy_correct(t, known_keys)
 
     return t
 
-def map_title(raw_title, mapping, known_titles_embed, known_keys, mapping_path):
-    # --- Preprocess with rules + ML + fuzzy ---
+
+# =========================================================
+# MAIN LOGIC FOR ONE TITLE
+# =========================================================
+def map_title(raw_title, mapping, known_embeddings, known_keys, mapping_path):
     cleaned = preprocess_title(raw_title, known_keys)
     normalized = normalize_title(cleaned)
 
-    # 1. Direct match
+    # Direct match
     if normalized in mapping:
         return mapping[normalized], False
 
-    # 2. Semantic similarity match with GTE
+    # Semantic match
     raw_emb = model.encode(normalized, normalize_embeddings=True)
-    similarities = util.cos_sim(raw_emb, known_titles_embed)[0].cpu().numpy()
+    sims = util.cos_sim(raw_emb, known_embeddings)[0].cpu().numpy()
 
-    best_idx = int(np.argmax(similarities))
-    best_score = similarities[best_idx]
+    best_idx = int(np.argmax(sims))
+    best_score = sims[best_idx]
     best_key = known_keys[best_idx]
     best_canonical = mapping[best_key]
 
-    # 3. High-confidence match → auto-add to JSON
     if best_score >= AUTO_LEARN_THRESHOLD:
         mapping[normalized] = best_canonical
         save_mapping(mapping, mapping_path)
         return best_canonical, False
 
-    # 4. Acceptable match only (no auto-learn)
     if best_score >= SIMILARITY_THRESHOLD:
         return best_canonical, False
 
-    # 5. Unknown case
     return "Unknown - Needs Review", True
 
+
 # =========================================================
-# MAIN PROCESSOR
+# MAIN PROCESS FUNCTION USED BY STREAMLIT APP
 # =========================================================
 def process_excel(input_path, output_path, mapping_path, dept_json_output,
                   target_column, sheet_name=None,
                   return_df=False, return_changes=False):
 
-    # Load Excel/CSV
+    # Read input file
     if input_path.endswith('.xlsx'):
         df = pd.read_excel(input_path, sheet_name=sheet_name) if sheet_name else pd.read_excel(input_path)
     else:
         df = pd.read_csv(input_path)
 
     if target_column not in df.columns:
-        raise ValueError(f"Column '{target_column}' not found in file.")
+        raise ValueError(f"Column '{target_column}' not found.")
 
     # Load mapping
     mapping = load_mapping(mapping_path)
@@ -160,34 +150,46 @@ def process_excel(input_path, output_path, mapping_path, dept_json_output,
     standardized = []
     unknowns = set()
 
-    total_rows = len(df)
-    progress_bar = st.progress(0)
-    status_text = st.empty()
+    total = len(df)
+    bar = st.progress(0)
+    status = st.empty()
 
     for i, raw in enumerate(df[target_column]):
         mapped, is_unknown = map_title(
             str(raw), mapping, known_embeddings, known_keys, mapping_path
         )
-        standardized.append(capitalize_title(mapped))
+        final_title = capitalize_title(mapped)
+        standardized.append(final_title)
 
         if is_unknown:
             unknowns.add(normalize_title(raw))
 
-        # Progress bar
-        if (i + 1) % 100 == 0 or i + 1 == total_rows:
-            percent = int(((i + 1) / total_rows) * 100)
-            progress_bar.progress(percent)
-            status_text.text(f"Processing row {i + 1} of {total_rows}...")
+        # Progress update
+        if (i + 1) % 50 == 0 or i + 1 == total:
+            pct = int(((i + 1) / total) * 100)
+            bar.progress(pct)
+            status.text(f"Processing {i+1}/{total}...")
 
-    progress_bar.progress(100)
-    status_text.text("Processing complete!")
+    bar.progress(100)
+    status.text("Processing complete!")
 
-    # Add normalized column
-    normalized_col = f"Normalized {target_column}"
-    df[normalized_col] = standardized
+    # Add new column
+    col_normalized = f"Normalized {target_column}"
+    df[col_normalized] = standardized
+
     df.to_excel(output_path, index=False)
 
-    # (Optional) change analysis logic could be added back here if you want
+    # Prepare change-tracking dataframe
+    changes_df = pd.DataFrame({
+        "Original": df[target_column],
+        "Normalized": df[col_normalized]
+    })
+
+    # Return correctly (fixes the unpacking error)
+    if return_df and return_changes:
+        return df, changes_df
 
     if return_df:
         return df
+
+    return None
